@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 import { VideoCallProvider } from "@/contexts/VideoCallContext"
-import { LoadingProvider } from "@/components/providers/LoadingProvider"
 // import { VideoCallHubProvider } from "@/components/providers/VideoCallHubProvider"
 
 const geistSans = Geist({
@@ -34,11 +33,9 @@ export default function RootLayout({
       >
         <Providers>
           <VideoCallProvider>
-            <LoadingProvider>
-              {/* <VideoCallHubProvider> */}
-              {children}
-              {/* </VideoCallHubProvider> */}
-            </LoadingProvider>
+            {/* <VideoCallHubProvider> */}
+            {children}
+            {/* </VideoCallHubProvider> */}
           </VideoCallProvider>
         </Providers>
       </body>

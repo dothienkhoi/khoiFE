@@ -4,7 +4,6 @@ import {
     CustomerApiResponse,
     CustomerPagedResult,
     Contact,
-    ChatGroup,
     ChatMessage,
     UserProfile,
     CustomerNotification,
@@ -153,7 +152,7 @@ export const uploadFile = async (
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('type', type);
+    formData.append('category', 'general');
 
     try {
         const response = await customerApiClient.post<CustomerApiResponse<{
@@ -164,7 +163,7 @@ export const uploadFile = async (
             fileId: number;
             id: string;
         }>>(
-            '/files/upload',
+            '/UpFiles/staging/avatar',
             formData,
             {
                 headers: {
@@ -456,32 +455,50 @@ export const removeContact = async (contactId: string) => {
 // ===============================
 
 export const getGroups = async () => {
-    const response = await customerApiClient.get<CustomerApiResponse<ChatGroup[]>>(
-        "/groups"
-    );
-    return response.data;
+    try {
+        const response = await customerApiClient.get<CustomerApiResponse<{
+            items: any[];
+            pageNumber: number;
+            pageSize: number;
+            totalRecords: number;
+            totalPages: number;
+        }>>(
+            "/me/groups"
+        );
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
 
 export const createGroup = async (data: {
     groupName: string;
     description?: string;
-    groupType: "Private" | "Public";
+    groupType: "Private" | "Public" | "Community";
     groupAvatarUrl?: string;
 }) => {
-    const response = await customerApiClient.post<CustomerApiResponse<{
-        groupId: string;
-        groupName: string;
-        defaultConversationId: number;
-    }>>(
-        "/groups",
-        data,
-        {
-            headers: {
-                'Content-Type': 'application/json'
+    try {
+        const response = await customerApiClient.post<CustomerApiResponse<{
+            groupId: string;
+            groupName: string;
+            description: string;
+            groupType: string;
+            groupAvatarUrl: string;
+            memberCount: number;
+        }>>(
+            "/groups",
+            data,
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             }
-        }
-    );
-    return response.data;
+        );
+
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
 };
 
 export const updateGroup = async (
@@ -492,9 +509,25 @@ export const updateGroup = async (
         isPrivate: boolean;
     }>
 ) => {
-    const response = await customerApiClient.put<CustomerApiResponse<ChatGroup>>(
+    const response = await customerApiClient.put<CustomerApiResponse<any>>(
         `/groups/${groupId}`,
         data
+    );
+    return response.data;
+};
+
+export const updateGroupAvatar = async (groupId: string, avatarFile: File) => {
+    const formData = new FormData();
+    formData.append('file', avatarFile);
+
+    const response = await customerApiClient.put<CustomerApiResponse<{ avatarUrl: string }>>(
+        `/groups/${groupId}/avatar`,
+        formData,
+        {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        }
     );
     return response.data;
 };
@@ -1169,6 +1202,7 @@ export const sendConversationMessage = async (
 
 /**
  * Send a new message in a group conversation
+ * Note: Backend expects conversationId as integer, not GUID
  */
 export const sendGroupMessage = async (
     groupId: string,
@@ -1181,10 +1215,23 @@ export const sendGroupMessage = async (
         body.parentMessageId = payload.parentMessageId;
     }
 
-    const response = await customerApiClient.post<
-        CustomerApiResponse<Message>
-    >(`/groups/${groupId}/messages`, body);
-    return response.data;
+    // Backend có endpoint /api/v1/groups/{groupId}/messages nhưng chưa implement
+    // Tạm thời sử dụng conversations endpoint
+    try {
+        const response = await customerApiClient.post<
+            CustomerApiResponse<Message>
+        >(`/conversations/${groupId}/messages`, body);
+        return response.data;
+    } catch (error: any) {
+        console.error("Failed to send group message:", error);
+
+        // Nếu lỗi 404, có thể do backend chưa hỗ trợ GUID cho conversations
+        if (error.response?.status === 404) {
+            throw new Error("Backend chưa hỗ trợ gửi tin nhắn nhóm với GUID. Cần implement endpoint riêng cho groups.");
+        }
+
+        throw error;
+    }
 };
 
 // ===============================

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useCustomerStore } from "@/store/customerStore";
 import { ChatInterface } from "@/components/features/chat/ChatInterface";
-import { ChatSidebar } from "@/components/features/chat/ChatSidebar";
+import { ConversationSidebar } from "@/components/features/chat/ConversationSidebar";
 
 export default function ChatPage() {
     const {
@@ -16,9 +16,9 @@ export default function ChatPage() {
 
     return (
         <div className="flex h-full chat-page-layout">
-            {/* Cột trái: Danh sách chat với tab Cá nhân/Nhóm */}
+            {/* Cột trái: Danh sách trò chuyện cá nhân */}
             <div className="w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
-                <ChatSidebar />
+                <ConversationSidebar />
             </div>
 
             {/* Cột phải: Khung chat chính */}

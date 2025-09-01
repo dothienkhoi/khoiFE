@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Users, Shield, Calendar, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Users, Shield, Calendar, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { getGroupPreviewByInviteCode, acceptGroupInvitation } from "@/lib/customer-api-client";
 import { useCustomerStore } from "@/store/customerStore";
 import { toast } from "sonner";
@@ -22,9 +22,8 @@ interface GroupPreview {
 export default function GroupInvitePage() {
     const params = useParams();
     const router = useRouter();
-    const { setMyGroups } = useCustomerStore();
+    const { setActiveNavItem } = useCustomerStore();
     const [groupPreview, setGroupPreview] = useState<GroupPreview | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
     const [isJoining, setIsJoining] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +36,6 @@ export default function GroupInvitePage() {
     }, [invitationCode]);
 
     const loadGroupPreview = async () => {
-        setIsLoading(true);
         setError(null);
 
         try {
@@ -55,8 +53,6 @@ export default function GroupInvitePage() {
             } else {
                 setError("Có lỗi xảy ra khi tải thông tin nhóm");
             }
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -83,12 +79,8 @@ export default function GroupInvitePage() {
                 const refreshEvent = new CustomEvent('refreshGroups');
                 window.dispatchEvent(refreshEvent);
 
-                // Navigate to the group chat
-                if (response.data.groupId) {
-                    router.push(`/groups/${response.data.groupId}`);
-                } else {
-                    router.push('/groups');
-                }
+                // Navigate to the chat page
+                router.push('/chat');
             } else {
                 toast.error(response.message || "Không thể tham gia nhóm");
             }
@@ -108,17 +100,7 @@ export default function GroupInvitePage() {
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-                <div className="text-center">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">Đang tải thông tin nhóm...</h2>
-                    <p className="text-muted-foreground">Vui lòng đợi trong giây lát</p>
-                </div>
-            </div>
-        );
-    }
+
 
     if (error) {
         return (
@@ -131,8 +113,8 @@ export default function GroupInvitePage() {
                         Không thể tải thông tin nhóm
                     </h2>
                     <p className="text-muted-foreground mb-6">{error}</p>
-                    <Button onClick={() => router.push('/groups')} variant="outline">
-                        Quay lại trang nhóm
+                    <Button onClick={() => router.push('/chat')} variant="outline">
+                        Quay lại trang chat
                     </Button>
                 </div>
             </div>
@@ -217,7 +199,7 @@ export default function GroupInvitePage() {
                         </Button>
 
                         <Button
-                            onClick={() => router.push('/groups')}
+                            onClick={() => router.push('/chat')}
                             variant="outline"
                             className="w-full"
                         >

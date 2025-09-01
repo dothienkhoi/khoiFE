@@ -6,14 +6,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { useCustomerStore } from "@/store/customerStore";
-import { chatHubUtils } from "@/components/providers/ChatHubProvider";
 import { sendConversationMessage, sendGroupMessage, uploadFilesToConversation, uploadFilesToGroup } from "@/lib/customer-api-client";
 import { Message } from "@/types/customer.types";
 import { MessageCircle } from "lucide-react";
 import { FilePreviewGallery } from "./FilePreviewGallery";
 import { DirectChatHeader } from "./DirectChatHeader";
-import { GroupChatHeader } from "../groups/GroupChatHeader";
-import { GroupInfoModal } from "./GroupInfoModal";
 
 interface FilePreview {
     url: string;
@@ -27,7 +24,6 @@ export function ChatInterface() {
         activeChatId,
         activeChatType,
         conversations,
-        myGroups,
         clearActiveChat,
         addMessage
     } = useCustomerStore();
@@ -44,14 +40,6 @@ export function ChatInterface() {
         [conversations, activeChatId]
     );
 
-    // Get current group details if it's a group chat
-    const currentGroup = useMemo(() => {
-        if (activeChatType === 'group') {
-            return myGroups.find((g: any) => (g.id || g.groupId) === activeChatId);
-        }
-        return null;
-    }, [myGroups, activeChatId, activeChatType]);
-
     // Các biến này không còn cần thiết vì đã được xử lý trong header components
     const conversationId = useMemo(() =>
         activeChatId ? Number(activeChatId) : null,
@@ -61,17 +49,13 @@ export function ChatInterface() {
     // Join/leave conversation when active chat changes
     useEffect(() => {
         if (conversationId && activeChatType === 'direct') {
-            chatHubUtils.joinConversation(conversationId);
-            return () => {
-                chatHubUtils.leaveConversation(conversationId);
-            };
-        }
-        // Group chat logic - sử dụng conversation methods cho group
-        if (conversationId && activeChatType === 'group') {
-            chatHubUtils.joinConversation(conversationId);
-            return () => {
-                chatHubUtils.leaveConversation(conversationId);
-            };
+            const chatHubUtils = (window as any).chatHubUtils;
+            if (chatHubUtils) {
+                chatHubUtils.joinConversation(conversationId);
+                return () => {
+                    chatHubUtils.leaveConversation(conversationId);
+                };
+            }
         }
     }, [conversationId, activeChatType]);
 
@@ -203,7 +187,7 @@ export function ChatInterface() {
         } finally {
             setIsUploading(false);
         }
-    }, [conversationId, activeChatType, activeChatId]);
+    }, [conversationId, activeChatType, activeChatId, addMessage, setReplyToMessage]);
 
     // Send files
     const handleSendFiles = useCallback(async () => {
@@ -246,7 +230,7 @@ export function ChatInterface() {
         } finally {
             setIsUploading(false);
         }
-    }, [conversationId, selectedFiles, removeAllFiles, activeChatType]);
+    }, [conversationId, selectedFiles, removeAllFiles, activeChatType, activeChatId, addMessage]);
 
     // Handle message input
     const handleMessageInput = useCallback((content: string, type: string, replyTo?: Message) => {
@@ -296,36 +280,8 @@ export function ChatInterface() {
                         // TODO: Implement user profile display
                     }}
                 />
-            ) : activeChatType === 'group' && currentGroup ? (
-                <GroupChatHeader
-                    group={currentGroup}
-                    onVideoCall={() => {
-                        // TODO: Implement video call for group chat
-                    }}
-                    onSearchMessages={() => {
-                        // TODO: Implement message search
-                    }}
-                    onShowGroupInfo={() => {
-                        setIsGroupInfoOpen(true);
-                    }}
-                />
             ) : null}
 
-            {/* Messages area */}
-            <div className="flex-1 overflow-hidden">
-                <MessageList
-                    conversationId={conversationId!}
-                    partnerName={activeChatType === 'group'
-                        ? (currentGroup?.name || currentGroup?.groupName || "Unknown Group")
-                        : (currentConversation?.displayName || "Unknown")
-                    }
-                    partnerAvatar={activeChatType === 'group'
-                        ? currentGroup?.avatarUrl
-                        : currentConversation?.avatarUrl
-                    }
-                    onReplyToMessage={setReplyToMessage}
-                />
-            </div>
 
             {/* File Preview */}
             {selectedFiles.length > 0 && (
@@ -335,6 +291,16 @@ export function ChatInterface() {
                     onRemoveAll={removeAllFiles}
                 />
             )}
+
+            {/* Messages */}
+            <div className="flex-1 overflow-hidden">
+                <MessageList
+                    conversationId={conversationId!}
+                    partnerName={currentConversation?.displayName || "Người dùng"}
+                    partnerAvatar={currentConversation?.avatarUrl}
+                    onReplyToMessage={setReplyToMessage}
+                />
+            </div>
 
             {/* Message input */}
             <div className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
@@ -347,15 +313,6 @@ export function ChatInterface() {
                     onCancelReply={() => setReplyToMessage(null)}
                 />
             </div>
-
-            {/* Group Info Modal */}
-            {currentGroup && (
-                <GroupInfoModal
-                    group={currentGroup}
-                    isOpen={isGroupInfoOpen}
-                    onClose={() => setIsGroupInfoOpen(false)}
-                />
-            )}
         </div>
     );
 }

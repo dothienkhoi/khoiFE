@@ -36,7 +36,6 @@ declare global {
 
 export default function NotificationsPage() {
     const { notifications, setNotifications, unreadCount, setActiveChat } = useCustomerStore();
-    const [isLoading, setIsLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [page, setPage] = useState(1);
     const [activeTab, setActiveTab] = useState("all");
@@ -60,15 +59,11 @@ export default function NotificationsPage() {
     }, []);
 
     const loadNotifications = async (pageNumber: number = 1) => {
-        if (isLoading) return;
-
         // Limit to maximum 3 pages
         if (pageNumber > 3) {
             toast.info("Chỉ hiển thị tối đa 3 trang thông báo");
             return;
         }
-
-        setIsLoading(true);
         try {
             const response = await getNotifications(pageNumber, 10); // 10 notifications per page
 
@@ -106,8 +101,6 @@ export default function NotificationsPage() {
             if (pageNumber === 1) {
                 setNotifications([]);
             }
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -315,9 +308,8 @@ export default function NotificationsPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => loadNotifications()}
-                        disabled={isLoading}
                     >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                        <RefreshCw className="h-4 w-4 mr-2" />
                         Làm mới
                     </Button>
                     {unreadCount > 0 && (
@@ -349,7 +341,7 @@ export default function NotificationsPage() {
                 <TabsContent value={activeTab} className="mt-6">
                     <ScrollArea className="h-[600px]">
                         <div className="space-y-4 pr-4">
-                            {filteredNotifications.length === 0 && !isLoading ? (
+                            {filteredNotifications.length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                                         <Bell className="h-8 w-8 text-muted-foreground" />
@@ -476,45 +468,13 @@ export default function NotificationsPage() {
                                         </div>
                                     ))}
 
-                                    {isLoading && (
-                                        <div className="space-y-4">
-                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                <div key={i} className="p-6 rounded-lg border">
-                                                    <div className="flex items-start gap-4">
-                                                        <Skeleton className="h-10 w-10 rounded-full" />
-                                                        <div className="flex-1 space-y-3">
-                                                            <div className="flex items-center justify-between">
-                                                                <Skeleton className="h-4 w-32" />
-                                                                <Skeleton className="h-3 w-20" />
-                                                            </div>
-                                                            <Skeleton className="h-4 w-full" />
-                                                            <Skeleton className="h-4 w-3/4" />
-                                                            <div className="flex gap-2">
-                                                                <Skeleton className="h-8 w-24" />
-                                                                <Skeleton className="h-8 w-20" />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {hasMore && !isLoading && (
+                                    {hasMore && (
                                         <div className="text-center pt-6">
                                             <Button
                                                 variant="outline"
                                                 onClick={() => loadNotifications(page + 1)}
-                                                disabled={isLoading}
                                             >
-                                                {isLoading ? (
-                                                    <>
-                                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                                        Đang tải...
-                                                    </>
-                                                ) : (
-                                                    "Tải thêm thông báo"
-                                                )}
+                                                Tải thêm thông báo
                                             </Button>
                                         </div>
                                     )}

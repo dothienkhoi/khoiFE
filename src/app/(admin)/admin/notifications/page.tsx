@@ -47,7 +47,7 @@ export default function AdminNotificationsPage() {
   const [pageSize, setPageSize] = useState(20);
   const [filterType, setFilterType] = useState<AdminNotificationType | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "unread">("all");
-  
+
   const queryClient = useQueryClient();
 
   // Fetch notifications with pagination and filters
@@ -123,7 +123,7 @@ export default function AdminNotificationsPage() {
           </PaginationLink>
         </PaginationItem>
       );
-      
+
       if (startPage > 2) {
         items.push(
           <PaginationItem key="ellipsis-start">
@@ -137,8 +137,8 @@ export default function AdminNotificationsPage() {
     for (let i = startPage; i <= endPage; i++) {
       items.push(
         <PaginationItem key={i}>
-          <PaginationLink 
-            href="#" 
+          <PaginationLink
+            href="#"
             onClick={(e) => { e.preventDefault(); setCurrentPage(i); }}
             isActive={i === currentPage}
           >
@@ -157,11 +157,11 @@ export default function AdminNotificationsPage() {
           </PaginationItem>
         );
       }
-      
+
       items.push(
         <PaginationItem key={data.totalPages}>
-          <PaginationLink 
-            href="#" 
+          <PaginationLink
+            href="#"
             onClick={(e) => { e.preventDefault(); setCurrentPage(data.totalPages); }}
           >
             {data.totalPages}
@@ -213,8 +213,8 @@ export default function AdminNotificationsPage() {
       {/* 1. Main Page Header (Title + Refresh Button) */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Thông báo quản trị</h1>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           size="icon"
           onClick={() => refetch()}
           disabled={isFetching}
@@ -238,7 +238,7 @@ export default function AdminNotificationsPage() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        
+
         <Select value={filterType} onValueChange={(value) => setFilterType(value as AdminNotificationType | "all")}>
           <SelectTrigger className="w-48">
             <SelectValue />
@@ -252,15 +252,15 @@ export default function AdminNotificationsPage() {
           </SelectContent>
         </Select>
       </div>
-      
+
       {/* 3. Notifications List Card */}
       <Card>
         <CardContent className="pt-6">
           {isLoading && <DashboardLoadingSkeleton />}
 
           {error && (
-            <ErrorDisplay 
-              error={error as Error} 
+            <ErrorDisplay
+              error={error as Error}
               retry={() => refetch()}
               title="Không thể tải danh sách thông báo"
             />
@@ -273,7 +273,7 @@ export default function AdminNotificationsPage() {
                 Không có thông báo nào
               </h3>
               <p className="text-sm text-muted-foreground">
-                {filterType !== "all" || statusFilter === "unread" 
+                {filterType !== "all" || statusFilter === "unread"
                   ? "Không có thông báo nào phù hợp với bộ lọc hiện tại"
                   : "Bạn chưa có thông báo nào"
                 }
@@ -301,31 +301,31 @@ export default function AdminNotificationsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
-                Trang {data.pageNumber} của {data.totalPages} • 
-                Hiển thị {((data.pageNumber - 1) * data.pageSize) + 1} đến {Math.min(data.pageNumber * data.pageSize, data.totalRecords)} 
+                Trang {data.pageNumber} của {data.totalPages} •
+                Hiển thị {((data.pageNumber - 1) * data.pageSize) + 1} đến {Math.min(data.pageNumber * data.pageSize, data.totalRecords)}
                 trong tổng số {data.totalRecords} thông báo
               </div>
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
-                    <PaginationPrevious 
-                      href="#" 
-                      onClick={(e) => { 
-                        e.preventDefault(); 
-                        setCurrentPage(Math.max(1, data.pageNumber - 1)); 
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCurrentPage(Math.max(1, data.pageNumber - 1));
                       }}
                       className={data.pageNumber === 1 ? "pointer-events-none opacity-50" : ""}
                     />
                   </PaginationItem>
-                  
+
                   {generatePaginationItems()}
-                  
+
                   <PaginationItem>
-                    <PaginationNext 
-                      href="#" 
-                      onClick={(e) => { 
-                        e.preventDefault(); 
-                        setCurrentPage(Math.min(data.totalPages, data.pageNumber + 1)); 
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCurrentPage(Math.min(data.totalPages, data.pageNumber + 1));
                       }}
                       className={data.pageNumber >= data.totalPages ? "pointer-events-none opacity-50" : ""}
                     />
@@ -337,7 +337,7 @@ export default function AdminNotificationsPage() {
         </Card>
       )}
 
-      
+
 
       {/* 6. Other Controls and Settings */}
       <div className="flex items-center justify-between">
@@ -357,7 +357,7 @@ export default function AdminNotificationsPage() {
             </Select>
           </div>
         </div>
-        
+
         <Button
           onClick={handleMarkAllAsRead}
           disabled={!hasUnreadNotifications || markAllAsReadMutation.isPending}

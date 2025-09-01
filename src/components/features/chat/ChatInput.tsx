@@ -82,9 +82,21 @@ export function ChatInput({
 
         if (isTyping) {
             onTyping?.(true);
+
+            // Send typing indicator via SignalR if available
+            const chatHubUtils = (window as any).chatHubUtils;
+            if (chatHubUtils && chatHubUtils.isConnected() && conversationId) {
+                chatHubUtils.sendTypingIndicator(conversationId, true).catch(console.error);
+            }
+
             timeout = setTimeout(() => {
                 setIsTyping(false);
                 onTyping?.(false);
+
+                // Send stop typing indicator
+                if (chatHubUtils && chatHubUtils.isConnected() && conversationId) {
+                    chatHubUtils.sendTypingIndicator(conversationId, false).catch(console.error);
+                }
             }, 1000);
         }
 
@@ -93,7 +105,7 @@ export function ChatInput({
                 clearTimeout(timeout);
             }
         };
-    }, [isTyping, onTyping]);
+    }, [isTyping, onTyping, conversationId]);
 
     // Close attachment menu when clicking outside
     useEffect(() => {
@@ -504,7 +516,7 @@ export function ChatInput({
             )}
 
             {/* Input Area */}
-            <div className="flex items-end gap-2">
+            <div className="flex items-end gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
                 {/* Attachment Button */}
                 <div className="relative" ref={attachmentRef}>
                     <Button

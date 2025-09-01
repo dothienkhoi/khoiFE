@@ -31,26 +31,6 @@ export interface ChatMessage {
 }
 
 /**
- * Group/Chat Room Types
- */
-export interface ChatGroup {
-    id: string;
-    name: string;
-    description?: string;
-    avatarUrl?: string;
-    isPrivate: boolean;
-    memberCount: number;
-    unreadCount: number;
-    isOnline: boolean;
-    createdAt: string;
-    updatedAt: string;
-    isMyGroup?: boolean;
-    category?: string;
-    tags?: string[];
-    lastMessage?: Message;
-}
-
-/**
  * User Profile Types
  */
 export interface UserProfile {
@@ -172,7 +152,6 @@ export interface CustomerNotification {
  */
 export interface SearchResult {
     users: UserProfile[];
-    groups: ChatGroup[];
     messages: ChatMessage[];
     posts: Post[];
 }
@@ -232,7 +211,7 @@ export interface ChatSettings {
  * Real-time Event Types
  */
 export interface RealtimeEvent {
-    type: 'message' | 'typing' | 'online_status' | 'group_update' | 'notification' | 'post_update';
+    type: 'message' | 'typing' | 'online_status' | 'notification' | 'post_update';
     data: any;
     timestamp: string;
 }
@@ -334,7 +313,7 @@ export interface MessageHistoryResponse {
 /**
  * Navigation Types
  */
-export type CustomerNavItem = 'chats' | 'communities' | 'profile' | 'notifications';
+export type CustomerNavItem = 'chats' | 'groups' | 'communities' | 'profile' | 'notifications';
 
 /**
  * Group Categories

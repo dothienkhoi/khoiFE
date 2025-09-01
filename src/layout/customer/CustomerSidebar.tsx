@@ -30,17 +30,12 @@ import {
     X
 } from "lucide-react";
 import { useCustomerStore } from "@/store/customerStore";
-import { Contact, ChatGroup, CustomerNavItem, Conversation } from "@/types/customer.types";
+import { Contact, CustomerNavItem, Conversation } from "@/types/customer.types";
 import { cn } from "@/lib/utils";
 import { UserSearchPopup } from "@/components/providers/UserSearchPopup";
-import { ConversationsList } from "@/components/features/chat/ConversationsList";
-import { CreateGroupDialog } from "@/components/features/groups/CreateGroupDialog";
-import { RightSideControls } from "@/components/features/layout/RightSideControls";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
 import { UserNav } from "@/components/shared/UserNav";
 import { NotificationDropdown } from "@/components/shared/NotificationDropdown";
-import { getMyGroups, getGroupDetails } from "@/lib/customer-api-client";
-import { toast } from "sonner";
 
 interface CustomerSidebarProps {
     isCollapsed?: boolean;
@@ -55,6 +50,7 @@ export function CustomerSidebar({ isCollapsed = false }: CustomerSidebarProps) {
     // Get current active nav item based on pathname
     const getCurrentNavItem = (path: string) => {
         if (path.includes('/chat')) return 'chats';
+        if (path.includes('/groups')) return 'groups';
         if (path.includes('/communities')) return 'communities';
         if (path.includes('/notifications')) return 'notifications';
         if (path.includes('/profile')) return 'profile';
@@ -76,18 +72,12 @@ export function CustomerSidebar({ isCollapsed = false }: CustomerSidebarProps) {
     }, []);
 
     const {
-        contacts,
-        myGroups,
-        communities,
         activeChatId,
         activeChatType,
         activeNavItem,
         setActiveChat,
         clearActiveChat,
-        setActiveNavItem,
-        setMyGroups,
-        toggleCreateGroup,
-        toggleSettings
+        setActiveNavItem
     } = useCustomerStore();
 
     // Chỉ hiển thị sidebar thu gọn
@@ -112,7 +102,8 @@ export function CustomerSidebar({ isCollapsed = false }: CustomerSidebarProps) {
                         {/* Navigation Items */}
                         {[
                             { id: 'chats', icon: MessageCircle, label: 'Cá nhân', path: '/chat' },
-                            { id: 'communities', icon: Users, label: 'Cộng đồng', path: '/communities' },
+                            { id: 'groups', icon: Users, label: 'Nhóm', path: '/groups' },
+                            { id: 'communities', icon: Compass, label: 'Cộng đồng', path: '/communities' },
                             { id: 'profile', icon: User, label: 'Hồ sơ', path: '/profile' }
                         ].map((item) => (
                             <Tooltip key={item.id} delayDuration={0}>
