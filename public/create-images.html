@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tạo Ảnh cho Landing Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .canvas-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            border-radius: 8px;
+            margin: 10px;
+        }
+
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #3730a3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Tạo Ảnh cho FastBite Group Landing Page</h1>
+
+    <div class="canvas-container">
+        <h3>1. Giao diện Tin Nhắn (800x600)</h3>
+        <canvas id="messagingCanvas" width="800" height="600"></canvas>
+        <br>
+        <button onclick="downloadImage('messagingCanvas', 'messaging-interface.png')">Tải xuống Ảnh Tin Nhắn</button>
+    </div>
+
+    <div class="canvas-container">
+        <h3>2. Bảng Tin Nhóm (800x600)</h3>
+        <canvas id="groupFeedCanvas" width="800" height="600"></canvas>
+        <br>
+        <button onclick="downloadImage('groupFeedCanvas', 'group-feed.png')">Tải xuống Ảnh Bảng Tin</button>
+    </div>
+
+    <div class="canvas-container">
+        <h3>3. Cuộc Gọi Video (800x600)</h3>
+        <canvas id="videoCallCanvas" width="800" height="600"></canvas>
+        <br>
+        <button onclick="downloadImage('videoCallCanvas', 'video-call-interface.png')">Tải xuống Ảnh Video Call</button>
+    </div>
+
+    <script>
+        // Tạo ảnh Giao diện Tin Nhắn
+        function createMessagingInterface() {
+            const canvas = document.getElementById('messagingCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 800, 600);
+            gradient.addColorStop(0, '#1e40af');
+            gradient.addColorStop(1, '#7c3aed');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 800, 600);
+
+            // Header
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(0, 0, 800, 80);
+
+            // Chat bubbles
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillRect(50, 120, 300, 60);
+            ctx.fillRect(50, 200, 250, 50);
+            ctx.fillRect(50, 270, 280, 55);
+
+            // Right side chat bubbles (user)
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(450, 140, 280, 60);
+            ctx.fillRect(470, 220, 260, 50);
+
+            // Input bar
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(0, 520, 800, 80);
+
+            // Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('Giao diện Tin Nhắn', 20, 50);
+            ctx.font = '16px Arial';
+            ctx.fillText('Tin nhắn sạch sẽ, nhanh chóng', 20, 75);
+        }
+
+        // Tạo ảnh Bảng Tin Nhóm
+        function createGroupFeed() {
+            const canvas = document.getElementById('groupFeedCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 800, 600);
+            gradient.addColorStop(0, '#7c3aed');
+            gradient.addColorStop(1, '#3730a3');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 800, 600);
+
+            // Header
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(0, 0, 800, 80);
+
+            // Post cards
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(20, 100, 760, 120);
+            ctx.fillRect(20, 240, 760, 120);
+            ctx.fillRect(20, 380, 760, 120);
+
+            // Avatar circles
+            ctx.fillStyle = '#8b5cf6';
+            ctx.beginPath();
+            ctx.arc(60, 160, 25, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(60, 300, 25, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(60, 440, 25, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('Bảng Tin Nhóm', 20, 50);
+            ctx.font = '16px Arial';
+            ctx.fillText('Chia sẻ cập nhật và thông báo', 20, 75);
+
+            ctx.font = '18px Arial';
+            ctx.fillText('Bài đăng mới trong nhóm DevTeam', 100, 140);
+            ctx.fillText('Kế hoạch ra mắt tính năng tuần này', 100, 280);
+            ctx.fillText('Thông báo: Họp nhóm vào thứ 6', 100, 420);
+        }
+
+        // Tạo ảnh Cuộc Gọi Video
+        function createVideoCall() {
+            const canvas = document.getElementById('videoCallCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 800, 600);
+            gradient.addColorStop(0, '#059669');
+            gradient.addColorStop(1, '#0d9488');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 800, 600);
+
+            // Main video area
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(50, 100, 700, 400);
+
+            // Video placeholder
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(70, 120, 660, 360);
+
+            // Control buttons
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(400, 520, 30, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.arc(300, 520, 25, 0, 2 * Math.PI);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(500, 520, 25, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('Cuộc Gọi Video', 20, 50);
+            ctx.font = '16px Arial';
+            ctx.fillText('Cuộc gọi video HD với chia sẻ màn hình', 20, 75);
+
+            ctx.font = '18px Arial';
+            ctx.fillText('Đang gọi...', 350, 200);
+        }
+
+        // Tải xuống ảnh
+        function downloadImage(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        // Khởi tạo tất cả ảnh
+        window.onload = function () {
+            createMessagingInterface();
+            createGroupFeed();
+            createVideoCall();
+        };
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,32 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3730a3;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="600" fill="url(#bg2)"/>
+  
+  <!-- Header -->
+  <rect x="0" y="0" width="800" height="80" fill="rgba(255,255,255,0.1)"/>
+  
+  <!-- Post cards -->
+  <rect x="20" y="100" width="760" height="120" fill="rgba(255,255,255,0.1)" rx="10"/>
+  <rect x="20" y="240" width="760" height="120" fill="rgba(255,255,255,0.1)" rx="10"/>
+  <rect x="20" y="380" width="760" height="120" fill="rgba(255,255,255,0.1)" rx="10"/>
+  
+  <!-- Avatar circles -->
+  <circle cx="60" cy="160" r="25" fill="#8b5cf6"/>
+  <circle cx="60" cy="300" r="25" fill="#8b5cf6"/>
+  <circle cx="60" cy="440" r="25" fill="#8b5cf6"/>
+  
+  <!-- Text -->
+  <text x="20" y="50" fill="white" font-family="Arial" font-size="24" font-weight="bold">Bảng Tin Nhóm</text>
+  <text x="20" y="75" fill="white" font-family="Arial" font-size="16">Chia sẻ cập nhật và thông báo</text>
+  
+  <text x="100" y="140" fill="white" font-family="Arial" font-size="18">Bài đăng mới trong nhóm DevTeam</text>
+  <text x="100" y="280" fill="white" font-family="Arial" font-size="18">Kế hoạch ra mắt tính năng tuần này</text>
+  <text x="100" y="420" fill="white" font-family="Arial" font-size="18">Thông báo: Họp nhóm vào thứ 6</text>
+</svg>

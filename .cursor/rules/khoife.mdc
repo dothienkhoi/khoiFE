@@ -1,0 +1,277 @@
+---
+description: This is the official Frontend Coding Style Guide for the FastBite Group project, outlining architecture, naming conventions, formatting, state management, form handling, API integration, styling, documentation practices, and development workflow to ensure consistency and maintainability across the codebase.
+globs:
+  - "*.tsx"
+  - "*.ts"
+  - "*.js"
+  - "*.jsx"
+  - "components/**/*"
+  - "lib/**/*"
+alwaysApply: false
+---
+
+# FastBite Group - Frontend Coding Style Guide
+
+## 1. Project Architecture
+
+### 1.1. File Structure (Next.js App Router)
+- **Route Groups**: Organized within the `app` directory to manage layouts.
+  - `(customer)/(auth)/`: Authentication pages (login, register) using a shared gradient layout.
+  - `(admin)/`: The admin dashboard interface, using a dedicated layout.
+  - `(customer)/`: The main end-user interface, using the primary application layout.
+  - Root-level routes in `app` are for public-facing pages (e.g., landing page, about).
+
+### 1.2. Component Organization
+- **Feature-Based Structure**:
+  - `components/ui/`: Atomic components from Shadcn/UI (Button, Input, Card, etc.).
+  - `components/shared/`: Components shared and reused across multiple domains (e.g., `Header`, `Footer`, `PageLoader`).
+  - `components/features/[domain]/`: Complex components belonging to a specific domain (e.g., `components/features/auth/LoginForm.tsx`, `components/features/dashboard/UserGrowthChart.tsx`).
+- **Container/Presentational Pattern**: Applied when a component involves complex logic.
+  - **Container**: Manages logic, state, and API calls.
+  - **Presentational**: Receives props and renders the UI.
+
+## 2. Naming Conventions
+
+### 2.1. Files & Components
+- **PascalCase** for files containing React components: `LoginForm.tsx`, `UserGrowthChart.tsx`.
+- **camelCase** for utility files and non-component logic: `apiClient.ts`, `dateUtils.ts`.
+- **kebab-case** for configuration files: `next.config.mjs`, `postcss.config.css`.
+
+### 2.2. Variables & Functions
+- **camelCase**: `const currentUser;`, `function handleResendEmail()`.
+- Names must be descriptive and clearly indicate their purpose: `const isUserAuthenticated`, `const verifyOtpMutation`.
+
+### 2.3. Types & Interfaces
+- **PascalCase**: `interface User`, `type ApiResponse<T>`.
+- Use standard suffixes for clarity:
+  - `...FormData`: For form data types. Example: `LoginFormData`.
+  - `...Dto`: For Data Transfer Objects from an API. Example: `DashboardSummaryDto`.
+  - `...Schema`: For Zod validation schemas. Example: `loginSchema`.
+
+## 3. Code Formatting
+
+- **Indentation**: 2 spaces.
+- **Semicolons**: Always use semicolons at the end of statements.
+- **Quotes**: Use double quotes (`"`) for JSX props and string literals.
+- **String Interpolation**: Prefer Template Literals (backticks `` ` ``).
+
+### 3.1. Component Structure
+- The `"use client";` directive must be the first line in Client Components.
+- **Import Order**:
+  1.  React & core libraries (next, react).
+  2.  Third-party libraries (lucide-react, zod).
+  3.  Internal project imports (using the `@/` alias).
+- **Exports**: Always use `named exports` for components.
+
+**Import Order Example:**
+```tsx
+// ✅ DO
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+import { loginUser } from "@/lib/api/auth";
+import { Button } from "@/components/ui/button";
+
+// ❌ DON'T
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+// ... (disorganized)
+Export Example:
+
+TypeScript
+
+// ✅ DO
+export function LoginForm() {
+  // ...
+}
+
+// ❌ DON'T
+// export default function LoginForm() { ... }
+4. State Management
+Global UI State: Zustand. Use the persist middleware to save state to localStorage (e.g., theme, sidebar state).
+
+Server State: TanStack Query. Used for fetching, caching, and updating server data.
+
+Local Component State: React.useState and React.useReducer. Only for state that is not shared outside the component (e.g., a modal's open/close state).
+
+4.1. Authentication State
+Managed centrally in stores/authStore.ts (using Zustand).
+
+The token is stored in an HttpOnly Cookie (set by the server). The store's state only reflects the logged-in status on the UI.
+
+5. Form Handling
+Validation: Zod for defining schemas. Place them in lib/schemas/[domain].schema.ts.
+
+Form Management: react-hook-form integrated with @hookform/resolvers/zod.
+
+Default Values: Must be set in the useForm hook, NOT in the Zod schema, to prevent type-inference issues.
+
+Schema Pattern:
+
+TypeScript
+
+// lib/schemas/auth.schema.ts
+import { z } from "zod";
+
+export const loginSchema = z.object({
+  email: z.string().email({ message: "Invalid email address." }),
+  password: z.string().min(1, { message: "Password is required." }),
+  rememberMe: z.boolean(), // DO NOT use .default(false) here
+});
+
+export type LoginFormData = z.infer<typeof loginSchema>;
+Form Usage Pattern:
+
+TypeScript
+
+// components/features/auth/LoginForm.tsx
+const form = useForm<LoginFormData>({
+  resolver: zodResolver(loginSchema),
+  defaultValues: {
+    email: "",
+    password: "",
+    rememberMe: false, // Set default values here
+  },
+});
+6. API Integration
+Client: Use an axios instance with configured interceptors for automatically attaching tokens and handling global errors. File: lib/apiClient.ts.
+
+Data Fetching & Mutations: Use TanStack Query (useQuery, useMutation).
+
+API Functions: Group API call functions by domain. Example: lib/api/auth.ts, lib/api/users.ts.
+
+6.1. Error Handling
+All API errors must be handled consistently in the onError callback of useMutation or useQuery.
+
+Use toasts (e.g., sonner) to provide user-facing feedback.
+
+API Error Handling Pattern (Utility Function):
+Create a utility function to standardize error display.
+
+TypeScript
+
+// lib/utils/handleApiError.ts
+import { toast } from "sonner";
+import { type ApiResponse } from "@/lib/types";
+
+export function handleApiError(error: any, title: string = "An error occurred") {
+  if (error?.response?.data) {
+    const errorData: ApiResponse<null> = error.response.data;
+    // Prefer the message from the errors array, otherwise use the main message
+    const errorMessage = errorData.errors?.[0]?.message || errorData.message || "An unknown server error occurred.";
+    toast.error(title, { description: errorMessage });
+  } else {
+    toast.error(title, { description: "Could not connect to the server. Please try again." });
+  }
+}
+
+// Usage in a component
+const mutation = useMutation({
+    mutationFn: loginUser,
+    onError: (error) => {
+        handleApiError(error, "Login Failed");
+    }
+});
+7. Styling
+Framework: Tailwind CSS.
+
+Component Library: Shadcn/UI.
+
+Conditional Classes: Use the cn() utility from lib/utils.ts to merge classes.
+
+Component Variants: Use class-variance-authority (cva) when creating components with multiple variants.
+
+Dark Mode: Fully supported.
+
+8. Comments & Documentation
+Comments: Only comment on complex or non-obvious logic. Avoid explaining self-evident code.
+
+JSDoc: Use JSDoc for utility functions and complex types to describe their purpose, parameters, and return values.
+
+Language:
+
+Code and logical comments should be in English.
+
+User-facing text has a specific rule (see Section 9).
+
+9. Standardization Rules
+This section lists mandatory rules for the AI and developers to enforce.
+
+Rule 1 (Branding): Always use the brand name "FastBite Group" throughout the UI. Do not use other names like "TeamChat".
+
+Rule 2 (Component Migration): All feature-related components must be located in their respective components/features/[domain] directory.
+
+Rule 3 (Language Consistency): All user-facing text (UI labels, messages, toasts) must be in Vietnamese. This is a project requirement.
+
+Rule 4 (API Error Utility): Always use the handleApiError utility function from lib/utils/handleApiError.ts to process API errors in onError callbacks.
+
+10. Development Workflow
+10.1. Commands
+Bash
+
+# Navigate to the frontend directory
+cd font-end
+
+# Run the development server (with Turbopack)
+npm run dev
+
+# Build the project for production
+npm run build
+
+# Lint and format the code
+npm run lint
+10.2. Core Dependencies
+Framework: Next.js 15+ (App Router)
+
+UI Library: React 19+
+
+Server State: TanStack Query v5
+
+Global State: Zustand
+
+Validation: Zod
+
+Styling: Tailwind CSS, Shadcn/UI
+
+11. Core Type Definitions
+11.1. ApiError Interface
+TypeScript
+
+export interface ApiError {
+  errorCode: string; // Internal error code for debugging
+  message: string;   // User-facing error message
+}
+11.2. ApiResponse<T> Interface
+TypeScript
+
+/**
+ * The standard wrapper for all API responses.
+ * @template T The specific type of the 'data' payload.
+ */
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors: ApiError[] | null;
+}
+11.3. PagedResult<T> Interface
+TypeScript
+
+/**
+ * Describes the structure for APIs that return paginated lists of data.
+ * @template T The type of items in the list.
+ */
+export interface PagedResult<T> {
+  items: T[];
+  pageNumber: number;
+  totalPages: number;
+  totalRecords: number;
+}
+12. Enforcement
+Linting: Use ESLint with a custom configuration to enforce rules.
+
+Formatting: Use Prettier with a configured .prettierrc file for consistency.
+
+Pre-commit Hook: Run npm run lint before each commit to ensure all code is compliant with the style guide.

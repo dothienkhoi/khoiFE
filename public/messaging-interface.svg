@@ -1,0 +1,30 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e40af;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="600" fill="url(#bg1)"/>
+  
+  <!-- Header -->
+  <rect x="0" y="0" width="800" height="80" fill="rgba(255,255,255,0.1)"/>
+  
+  <!-- Chat bubbles -->
+  <rect x="50" y="120" width="300" height="60" fill="rgba(255,255,255,0.9)" rx="10"/>
+  <rect x="50" y="200" width="250" height="50" fill="rgba(255,255,255,0.9)" rx="10"/>
+  <rect x="50" y="270" width="280" height="55" fill="rgba(255,255,255,0.9)" rx="10"/>
+  
+  <!-- User chat bubbles -->
+  <rect x="450" y="140" width="280" height="60" fill="#3b82f6" rx="10"/>
+  <rect x="470" y="220" width="260" height="50" fill="#3b82f6" rx="10"/>
+  
+  <!-- Input bar -->
+  <rect x="0" y="520" width="800" height="80" fill="rgba(255,255,255,0.2)"/>
+  
+  <!-- Text -->
+  <text x="20" y="50" fill="white" font-family="Arial" font-size="24" font-weight="bold">Giao diện Tin Nhắn</text>
+  <text x="20" y="75" fill="white" font-family="Arial" font-size="16">Tin nhắn sạch sẽ, nhanh chóng</text>
+</svg>
