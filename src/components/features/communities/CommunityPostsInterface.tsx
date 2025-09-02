@@ -117,6 +117,19 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         }
     };
 
+    const refreshPostDetail = async () => {
+        if (!detailPost) return;
+        try {
+            setDetailLoading(true);
+            const res = await getPostDetail((detailPost.postId || detailPost.id).toString());
+            if (res.success && res.data) setDetailPost(res.data);
+        } catch (e: any) {
+            handleApiError(e, "Không thể làm mới chi tiết");
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
     // Fetch posts from API with pagination
     const fetchPosts = async (page: number = 1, refresh: boolean = false) => {
         try {
@@ -503,7 +516,10 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
             <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>Chi tiết bài viết</DialogTitle>
+                        <div className="flex items-center justify-between">
+                            <DialogTitle>Chi tiết bài viết</DialogTitle>
+                            <Button size="sm" variant="outline" onClick={refreshPostDetail} disabled={detailLoading}>Làm mới</Button>
+                        </div>
                     </DialogHeader>
                     {detailLoading ? (
                         <div className="flex items-center text-gray-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Đang tải...</div>
