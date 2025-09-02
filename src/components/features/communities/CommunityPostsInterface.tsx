@@ -320,17 +320,22 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     };
 
     const buildCommentTree = (flat: any[] = []) => {
-        const byId: Record<number, any> = {};
+        const byId: Record<string, any> = {};
         flat.forEach((c: any) => {
-            byId[c.commentId] = { ...c, replies: [] };
+            const idKey = String(c.commentId);
+            byId[idKey] = { ...c, replies: [] };
         });
         flat.forEach((c: any) => {
             const parentId = c.parentCommentId;
-            if (parentId && byId[parentId]) {
-                byId[parentId].replies.push(byId[c.commentId]);
+            if (parentId !== null && parentId !== undefined) {
+                const parentKey = String(parentId);
+                const childKey = String(c.commentId);
+                if (byId[parentKey] && byId[childKey]) {
+                    byId[parentKey].replies.push(byId[childKey]);
+                }
             }
         });
-        return Object.values(byId).filter((c: any) => !c.parentCommentId);
+        return Object.values(byId).filter((c: any) => c.parentCommentId === null || c.parentCommentId === undefined);
     };
 
     const renderComments = (nodes: any[] = [], level: number = 0) => (
