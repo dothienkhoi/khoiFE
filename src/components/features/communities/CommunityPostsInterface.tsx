@@ -18,24 +18,49 @@ import {
     Share2,
     MoreHorizontal,
     ThumbsUp,
-    Bookmark
+    Bookmark,
+    RefreshCw,
+    Loader2,
+    X
 } from "lucide-react";
 import { toast } from "sonner";
+import { handleApiError } from "@/lib/utils";
+import { getGroupPosts, createGroupPost, togglePostLike, getPostDetail, addPostComment } from "@/lib/customer-api-client";
+
+interface Comment {
+    commentId: number;
+    content: string;
+    author: {
+        userId: string;
+        fullName: string;
+        avatarUrl?: string;
+    };
+    createdAt: string;
+    parentCommentId?: number | null;
+    replies: Comment[];
+}
 
 interface Post {
     id: string;
+    postId: number;
+    title: string;
     content: string;
+    contentMarkdown: string;
     author: {
         id: string;
+        userId: string;
         name: string;
+        fullName: string;
+        displayName?: string;
         avatarUrl?: string;
     };
     createdAt: string;
     likeCount: number;
     commentCount: number;
-    shareCount: number;
-    isLiked: boolean;
-    isBookmarked: boolean;
+    shareCount?: number;
+    isLiked?: boolean;
+    isLikedByCurrentUser?: boolean;
+    isBookmarked?: boolean;
     images?: string[];
     attachments?: Array<{
         id: string;
@@ -44,6 +69,7 @@ interface Post {
         size: number;
         url: string;
     }>;
+    comments?: Comment[];
 }
 
 interface CommunityPostsInterfaceProps {
@@ -56,158 +82,202 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     const [posts, setPosts] = useState<Post[]>([]);
     const [newPostContent, setNewPostContent] = useState("");
     const [isCreatingPost, setIsCreatingPost] = useState(false);
+    const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [showCreatePost, setShowCreatePost] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMorePosts, setHasMorePosts] = useState(false);
+    const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+    const [postComments, setPostComments] = useState<Record<string, Comment[]>>({});
+    const [loadingComments, setLoadingComments] = useState<Record<string, boolean>>({});
+    const [newComment, setNewComment] = useState<Record<string, string>>({});
 
-    // Mock data - sẽ thay thế bằng API call
-    useEffect(() => {
-        const mockPosts: Post[] = [
-            {
-                id: "1",
-                content: "Chào mừng tất cả thành viên mới tham gia nhóm! Hãy chia sẻ kinh nghiệm và kiến thức của bạn với cộng đồng nhé. 🚀",
-                author: {
-                    id: "1",
-                    name: "Nguyễn Văn A",
-                    avatarUrl: "/api/placeholder/32/32"
-                },
-                createdAt: "2 giờ trước",
-                likeCount: 15,
-                commentCount: 8,
-                shareCount: 3,
-                isLiked: false,
-                isBookmarked: false,
-                images: ["/api/placeholder/400/300"]
-            },
-            {
-                id: "2",
-                content: "Mình vừa hoàn thành một dự án React mới. Có ai muốn xem demo và góp ý không? Link demo: https://example.com",
-                author: {
-                    id: "2",
-                    name: "Trần Thị B",
-                    avatarUrl: "/api/placeholder/32/32"
-                },
-                createdAt: "5 giờ trước",
-                likeCount: 23,
-                commentCount: 12,
-                shareCount: 7,
-                isLiked: true,
-                isBookmarked: false
-            },
-            {
-                id: "3",
-                content: "Tài liệu học tập về UI/UX Design cho người mới bắt đầu. File PDF đính kèm bên dưới.",
-                author: {
-                    id: "3",
-                    name: "Lê Văn C",
-                    avatarUrl: "/api/placeholder/32/32"
-                },
-                createdAt: "1 ngày trước",
-                likeCount: 31,
-                commentCount: 18,
-                shareCount: 12,
-                isLiked: false,
-                isBookmarked: true,
-                attachments: [
-                    {
-                        id: "1",
-                        name: "UI_UX_Guide.pdf",
-                        type: "pdf",
-                        size: 2048576,
-                        url: "/api/placeholder/file"
-                    }
-                ]
+    // Fetch posts from API with pagination
+    const fetchPosts = async (page: number = 1, refresh: boolean = false) => {
+        try {
+            if (refresh) setIsRefreshing(true);
+            setIsLoadingPosts(true);
+
+            const response = await getGroupPosts(groupId, page, 10);
+            if (response.success && response.data) {
+                const items = response.data.items || [];
+                const mapped: Post[] = items.map((p: any) => ({
+                    id: p.id || p.postId?.toString(),
+                    postId: p.postId,
+                    title: p.title || p.Title || "", // fallback from DB casing
+                    content: p.content || p.contentMarkdown || p.contentSnippet || "", // include snippet from list API
+                    contentMarkdown: p.contentMarkdown || "",
+                    author: {
+                        id: p.author?.userId || p.authorId,
+                        userId: p.author?.userId || p.authorId,
+                        name: p.author?.displayName || p.authorName || p.author?.fullName || "Unknown User",
+                        fullName: p.author?.fullName || p.author?.displayName || p.authorName || "Unknown User",
+                        displayName: p.author?.displayName || p.authorName || p.author?.fullName || "Unknown User",
+                        avatarUrl: p.author?.avatarUrl || p.authorAvatar || p.author?.avatarURL
+                    },
+                    createdAt: p.createdAt,
+                    likeCount: p.likeCount || 0,
+                    commentCount: p.commentCount || 0,
+                    isLiked: p.isLikedByCurrentUser || p.isLiked,
+                    attachments: []
+                }));
+
+                if (page === 1 || refresh) setPosts(mapped); else setPosts(prev => [...prev, ...mapped]);
+
+                const totalPages = response.data.totalPages || 1;
+                const pageNumber = response.data.pageNumber || page;
+                setHasMorePosts(pageNumber < totalPages);
+                setCurrentPage(pageNumber);
+            } else {
+                setPosts([]);
+                setHasMorePosts(false);
             }
-        ];
-        setPosts(mockPosts);
+        } catch (error: any) {
+            const err = handleApiError(error, "Không thể tải bài viết");
+            console.error(err.message);
+            setPosts([]);
+            setHasMorePosts(false);
+        } finally {
+            setIsLoadingPosts(false);
+            setIsRefreshing(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPosts(1, true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [groupId]);
 
-    // Handle create post
     const handleCreatePost = async () => {
-        if (!newPostContent.trim()) {
-            toast.error("Vui lòng nhập nội dung bài viết");
-            return;
-        }
-
-        setIsCreatingPost(true);
-
         try {
-            // TODO: Gọi API tạo bài viết
-            // const response = await createPost(groupId, { content: newPostContent, files: selectedFiles });
+            if (!newPostContent.trim()) return;
+            setIsCreatingPost(true);
 
-            // Mock response
-            const newPost: Post = {
-                id: Date.now().toString(),
-                content: newPostContent.trim(),
-                author: {
-                    id: "current-user",
-                    name: "Bạn",
-                    avatarUrl: "/api/placeholder/32/32"
-                },
-                createdAt: "Vừa xong",
-                likeCount: 0,
-                commentCount: 0,
-                shareCount: 0,
-                isLiked: false,
-                isBookmarked: false,
-                images: selectedFiles.length > 0 ? selectedFiles.map(file => URL.createObjectURL(file)) : undefined
+            const payload = {
+                title: `Bài viết mới trong ${groupName}`,
+                contentMarkdown: newPostContent.trim(),
+                attachmentFileIds: [] as string[]
             };
 
-            setPosts(prev => [newPost, ...prev]);
-            setNewPostContent("");
-            setSelectedFiles([]);
-            setShowCreatePost(false);
-            toast.success("Đăng bài thành công!");
-
-        } catch (error) {
-            console.error("Error creating post:", error);
-            toast.error("Không thể đăng bài. Vui lòng thử lại.");
+            const response = await createGroupPost(groupId, payload);
+            if (response.success) {
+                toast.success("Đăng bài thành công!");
+                setNewPostContent("");
+                setSelectedFiles([]);
+                fetchPosts(1, true);
+            } else {
+                toast.error(response.message || "Không thể đăng bài");
+            }
+        } catch (error: any) {
+            const err = handleApiError(error, "Không thể đăng bài");
+            console.error(err.message);
         } finally {
             setIsCreatingPost(false);
         }
     };
 
-    // Handle file selection
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        setSelectedFiles(prev => [...prev, ...files]);
-    };
-
-    // Handle remove file
-    const removeFile = (index: number) => {
-        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    };
-
-    // Handle post actions
-    const handlePostAction = async (postId: string, action: "like" | "bookmark") => {
+    const handleToggleLike = async (post: Post) => {
+        // Optimistic UI
+        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isLiked: !p.isLiked, likeCount: (p.likeCount || 0) + (p.isLiked ? -1 : 1) } : p));
         try {
-            // TODO: Gọi API thực hiện action
-            // await performPostAction(postId, action);
-
-            // Update local state
-            setPosts(prev => prev.map(post => {
-                if (post.id === postId) {
-                    if (action === "like") {
-                        return {
-                            ...post,
-                            isLiked: !post.isLiked,
-                            likeCount: post.isLiked ? post.likeCount - 1 : post.likeCount + 1
-                        };
-                    } else if (action === "bookmark") {
-                        return {
-                            ...post,
-                            isBookmarked: !post.isBookmarked
-                        };
-                    }
-                }
-                return post;
-            }));
-
-        } catch (error) {
-            console.error(`Error performing ${action}:`, error);
+            const res = await togglePostLike(post.postId.toString());
+            if (!res.success) {
+                // rollback on failure
+                setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isLiked: !p.isLiked, likeCount: (p.likeCount || 0) + (p.isLiked ? -1 : 1) } : p));
+                toast.error(res.message || "Không thể thao tác thích/bỏ thích");
+            }
+        } catch (error: any) {
+            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isLiked: !p.isLiked, likeCount: (p.likeCount || 0) + (p.isLiked ? -1 : 1) } : p));
+            handleApiError(error, "Không thể thao tác thích/bỏ thích");
         }
     };
 
-    // Format file size
+    const toggleComments = async (post: Post) => {
+        // Ensure set is always defined
+        const currentSet = expandedPosts instanceof Set ? expandedPosts : new Set<string>();
+        const isExpanded = currentSet.has(post.id);
+        const next = new Set(currentSet);
+        if (isExpanded) {
+            next.delete(post.id);
+            setExpandedPosts(next);
+            return;
+        }
+        next.add(post.id);
+        setExpandedPosts(next);
+        // fetch detail if not loaded
+        if (!postComments[post.id]) {
+            setLoadingComments(prev => ({ ...prev, [post.id]: true }));
+            try {
+                const res = await getPostDetail(post.postId.toString());
+                if (res.success && res.data) {
+                    const comments: Comment[] = (res.data.comments || []).map((c: any) => ({
+                        commentId: c.commentId,
+                        content: c.content,
+                        author: { userId: c.author?.userId, fullName: c.author?.displayName || c.author?.fullName || "", avatarUrl: c.author?.avatarUrl },
+                        createdAt: c.createdAt,
+                        parentCommentId: c.parentCommentId,
+                        replies: []
+                    }));
+                    setPostComments(prev => ({ ...prev, [post.id]: comments }));
+                } else {
+                    setPostComments(prev => ({ ...prev, [post.id]: [] }));
+                }
+            } catch (error: any) {
+                handleApiError(error, "Không thể tải bình luận");
+            } finally {
+                setLoadingComments(prev => ({ ...prev, [post.id]: false }));
+            }
+        }
+    };
+
+    const submitComment = async (post: Post) => {
+        const content = (newComment[post.id] || "").trim();
+        if (!content) return;
+        // optimistic add
+        const temp: Comment = {
+            commentId: Math.floor(Math.random() * 1e9),
+            content,
+            author: { userId: "me", fullName: "Bạn", avatarUrl: undefined },
+            createdAt: new Date().toISOString(),
+            parentCommentId: null,
+            replies: []
+        };
+        setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), temp] }));
+        setNewComment(prev => ({ ...prev, [post.id]: "" }));
+        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p));
+        try {
+            const res = await addPostComment(post.postId.toString(), { content });
+            if (!res.success) {
+                toast.error(res.message || "Không thể bình luận");
+                // rollback count; keep temp comment for UX
+                setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) } : p));
+            } else {
+                // Optionally refresh detail to get accurate server data
+                const detail = await getPostDetail(post.postId.toString());
+                if (detail.success) {
+                    const comments: Comment[] = (detail.data.comments || []).map((c: any) => ({
+                        commentId: c.commentId,
+                        content: c.content,
+                        author: { userId: c.author?.userId, fullName: c.author?.displayName || c.author?.fullName || "", avatarUrl: c.author?.avatarUrl },
+                        createdAt: c.createdAt,
+                        parentCommentId: c.parentCommentId,
+                        replies: []
+                    }));
+                    setPostComments(prev => ({ ...prev, [post.id]: comments }));
+                }
+            }
+        } catch (error: any) {
+            handleApiError(error, "Không thể bình luận");
+        }
+    };
+
+    const handleLoadMore = () => {
+        if (hasMorePosts && !isLoadingPosts) fetchPosts(currentPage + 1);
+    };
+
+    const handleRefresh = () => { fetchPosts(1, true); };
+
     const formatFileSize = (bytes: number) => {
         if (bytes === 0) return "0 Bytes";
         const k = 1024;
@@ -216,91 +286,75 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     };
 
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return "";
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffInHours = Math.floor(diffMs / (1000 * 60 * 60));
+        if (diffInHours < 1) return "Vừa xong";
+        if (diffInHours < 24) return `${diffInHours} giờ trước`;
+        const days = Math.floor(diffInHours / 24);
+        return `${days} ngày trước`;
+    };
+
+    const formatDateAbsolute = (dateString: string) => {
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return "";
+        const pad = (n: number) => n.toString().padStart(2, "0");
+        return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    };
+
+    const isValidHttpUrl = (value?: string) => {
+        if (!value || typeof value !== "string") return false;
+        try {
+            const u = new URL(value);
+            return u.protocol === "http:" || u.protocol === "https:";
+        } catch {
+            return false;
+        }
+    };
+
     return (
         <div className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto p-6 space-y-6">
-                {/* Create Post Section */}
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-start space-x-3">
-                            <Avatar className="h-10 w-10">
-                                <AvatarImage src="/api/placeholder/32/32" />
-                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                                    B
-                                </AvatarFallback>
+                <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center space-x-4">
+                        <div className="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl shadow-lg">
+                            <FileText className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bài viết trong {groupName}</h2>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Chia sẻ và tương tác với cộng đồng</p>
+                        </div>
+                    </div>
+                    <Button onClick={handleRefresh} disabled={isRefreshing} variant="outline" size="sm" className="flex items-center space-x-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                        <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        <span>Làm mới</span>
+                    </Button>
+                </div>
+
+                {/* Create Post */}
+                <Card className="border-2 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl">
+                    <CardContent className="p-6">
+                        <div className="flex items-start space-x-4">
+                            <Avatar className="h-12 w-12 ring-2 ring-blue-100 dark:ring-blue-900 shadow-md">
+                                <AvatarImage src="/api/placeholder/48/48" />
+                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold text-lg">B</AvatarFallback>
                             </Avatar>
-
-                            <div className="flex-1 space-y-3">
-                                <Textarea
-                                    placeholder={`Bạn muốn chia sẻ gì với ${groupName}?`}
-                                    value={newPostContent}
-                                    onChange={(e) => setNewPostContent(e.target.value)}
-                                    className="min-h-[100px] resize-none"
-                                />
-
-                                {/* File Preview */}
-                                {selectedFiles.length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                        {selectedFiles.map((file, index) => (
-                                            <div key={index} className="relative">
-                                                {file.type.startsWith('image/') ? (
-                                                    <img
-                                                        src={URL.createObjectURL(file)}
-                                                        alt={file.name}
-                                                        className="w-20 h-20 object-cover rounded-lg"
-                                                    />
-                                                ) : (
-                                                    <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                                                        <FileText className="h-8 w-8 text-gray-400" />
-                                                    </div>
-                                                )}
-                                                <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full"
-                                                    onClick={() => removeFile(index)}
-                                                >
-                                                    ×
-                                                </Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Post Actions */}
-                                <div className="flex items-center justify-between">
+                            <div className="flex-1 space-y-4">
+                                <div className="relative">
+                                    <Textarea placeholder={`Chia sẻ điều gì đó với cộng đồng ${groupName}...`} value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} className="min-h-[120px] resize-none border-2 border-gray-200 dark:border-gray-600 rounded-xl p-4 text-base focus:border-blue-500 dark:focus:border-blue-400 transition-colors" disabled={isCreatingPost} />
+                                </div>
+                                <div className="flex items-center justify-between pt-2">
                                     <div className="flex items-center space-x-2">
-                                        <Input
-                                            type="file"
-                                            multiple
-                                            accept="image/*,.pdf,.doc,.docx,.txt"
-                                            onChange={handleFileSelect}
-                                            className="hidden"
-                                            id="file-upload"
-                                        />
-                                        <label
-                                            htmlFor="file-upload"
-                                            className="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                                        >
-                                            <Image className="h-5 w-5 text-gray-500" />
-                                        </label>
-                                        <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                                            <FileText className="h-5 w-5 text-gray-500" />
-                                        </button>
-                                        <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                                            <Link className="h-5 w-5 text-gray-500" />
-                                        </button>
-                                        <button className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                                            <Smile className="h-5 w-5 text-gray-500" />
-                                        </button>
+                                        <Button type="button" variant="ghost" size="icon"><Image className="h-5 w-5" /></Button>
+                                        <Button type="button" variant="ghost" size="icon"><FileText className="h-5 w-5" /></Button>
+                                        <Button type="button" variant="ghost" size="icon"><Link className="h-5 w-5" /></Button>
+                                        <Button type="button" variant="ghost" size="icon"><Smile className="h-5 w-5" /></Button>
                                     </div>
-
-                                    <Button
-                                        onClick={handleCreatePost}
-                                        disabled={isCreatingPost || !newPostContent.trim()}
-                                        size="sm"
-                                    >
-                                        {isCreatingPost ? "Đang đăng..." : "Đăng bài"}
+                                    <Button onClick={handleCreatePost} disabled={isCreatingPost || !newPostContent.trim()} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+                                        <Send className="h-4 w-4 mr-2" /> Đăng bài
                                     </Button>
                                 </div>
                             </div>
@@ -310,131 +364,112 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
 
                 {/* Posts List */}
                 <div className="space-y-6">
+                    {isLoadingPosts && currentPage === 1 && (
+                        <div className="flex justify-center items-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                            <span className="ml-2 text-gray-500">Đang tải bài viết...</span>
+                        </div>
+                    )}
+
+                    {!isLoadingPosts && posts.length === 0 && (
+                        <Card className="border-2 border-dashed border-gray-300 dark:border-gray-600">
+                            <CardContent className="text-center py-16">
+                                <div className="w-20 h-20 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/20 dark:to-purple-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <FileText className="w-10 h-10 text-blue-500 dark:text-blue-400" />
+                                </div>
+                                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Chưa có bài viết nào</h3>
+                                <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">Hãy là người đầu tiên chia sẻ điều gì đó thú vị với cộng đồng {groupName}!</p>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {posts.map((post) => (
-                        <Card key={post.id} className="hover:shadow-md transition-shadow">
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <Avatar className="h-10 w-10">
-                                            <AvatarImage src={post.author.avatarUrl} />
-                                            <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                                                {post.author.name.charAt(0).toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
-
-                                        <div>
-                                            <h3 className="font-semibold text-gray-900 dark:text-white">
-                                                {post.author.name}
-                                            </h3>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                {post.createdAt}
-                                            </p>
+                        <Card key={post.id} className="border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                            <CardContent className="p-6">
+                                <div className="flex items-start space-x-3 mb-4">
+                                    <Avatar className="h-10 w-10">
+                                        <AvatarImage src={isValidHttpUrl(post.author.avatarUrl) ? post.author.avatarUrl : undefined} />
+                                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{(post.author.fullName || post.author.displayName || post.author.name || "U").charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center space-x-2">
+                                            <h3 className="font-semibold text-gray-900 dark:text-white">{post.author.fullName || post.author.displayName || post.author.name || "Unknown User"}</h3>
+                                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                                {formatDateAbsolute(post.createdAt)}
+                                            </span>
                                         </div>
+                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white mt-1">{post.title}</h4>
                                     </div>
-
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
                                 </div>
-                            </CardHeader>
-
-                            <CardContent className="space-y-4">
-                                {/* Post Content */}
-                                <p className="text-gray-900 dark:text-white whitespace-pre-wrap">
-                                    {post.content}
-                                </p>
-
-                                {/* Post Images */}
-                                {post.images && post.images.length > 0 && (
-                                    <div className="grid grid-cols-1 gap-2">
-                                        {post.images.map((image, index) => (
-                                            <img
-                                                key={index}
-                                                src={image}
-                                                alt={`Post image ${index + 1}`}
-                                                className="w-full rounded-lg"
-                                            />
-                                        ))}
+                                <div className="mb-4">
+                                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{post.content || post.contentMarkdown || (post as any).contentSnippet || ""}</p>
+                                </div>
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+                                    <div className="flex items-center space-x-6">
+                                        <button onClick={() => handleToggleLike(post)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                            <Heart className={`h-5 w-5 ${post.isLiked ? "fill-current" : ""}`} />
+                                            <span className="text-sm font-medium">{post.likeCount}</span>
+                                        </button>
+                                        <button onClick={() => toggleComments(post)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                                            <MessageCircle className="h-5 w-5" />
+                                            <span className="text-sm font-medium">{post.commentCount}</span>
+                                        </button>
+                                        <button className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-500 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-500/20 transition-colors">
+                                            <Share2 className="h-5 w-5" />
+                                            <span className="text-sm font-medium">Chia sẻ</span>
+                                        </button>
                                     </div>
-                                )}
+                                    <button className={`p-2 rounded-lg transition-colors ${post.isBookmarked ? "text-blue-500 bg-blue-50 dark:bg-blue-900/20" : "text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"}`}>
+                                        <Bookmark className={`h-5 w-5 ${post.isBookmarked ? "fill-current" : ""}`} />
+                                    </button>
+                                </div>
 
-                                {/* Post Attachments */}
-                                {post.attachments && post.attachments.length > 0 && (
-                                    <div className="space-y-2">
-                                        {post.attachments.map((attachment) => (
-                                            <div
-                                                key={attachment.id}
-                                                className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                                            >
-                                                <FileText className="h-8 w-8 text-gray-400" />
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-medium text-gray-900 dark:text-white truncate">
-                                                        {attachment.name}
-                                                    </p>
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                        {formatFileSize(attachment.size)}
-                                                    </p>
+                                {expandedPosts && expandedPosts instanceof Set && expandedPosts.has(post.id) && (
+                                    <div className="mt-4 space-y-4">
+                                        {loadingComments[post.id] ? (
+                                            <div className="flex items-center text-gray-500"><Loader2 className="h-4 w-4 animate-spin mr-2" /> Đang tải bình luận...</div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                {(postComments[post.id] || []).map((c) => (
+                                                    <div key={c.commentId} className="flex items-start space-x-3">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarImage src={c.author.avatarUrl} />
+                                                            <AvatarFallback className="bg-blue-600 text-white">{c.author.fullName?.charAt(0) || "U"}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="bg-gray-50 dark:bg-gray-800 rounded-xl px-4 py-2">
+                                                            <div className="text-sm font-medium text-gray-900 dark:text-white">{c.author.fullName}</div>
+                                                            <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{c.content}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                <div className="flex items-center space-x-2">
+                                                    <Input value={newComment[post.id] || ""} onChange={(e) => setNewComment(prev => ({ ...prev, [post.id]: e.target.value }))} placeholder="Viết bình luận..." className="flex-1" />
+                                                    <Button size="sm" onClick={() => submitComment(post)} disabled={!((newComment[post.id] || "").trim())}>
+                                                        Gửi
+                                                    </Button>
                                                 </div>
-                                                <Button variant="outline" size="sm">
-                                                    Tải xuống
-                                                </Button>
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 )}
-
-                                {/* Post Stats */}
-                                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                                    <div className="flex items-center space-x-4">
-                                        <span>{post.likeCount} lượt thích</span>
-                                        <span>{post.commentCount} bình luận</span>
-                                        <span>{post.shareCount} lượt chia sẻ</span>
-                                    </div>
-                                </div>
-
-                                {/* Post Actions */}
-                                <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-700">
-                                    <div className="flex items-center space-x-1">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handlePostAction(post.id, "like")}
-                                            className={`flex items-center space-x-2 ${post.isLiked ? "text-blue-600" : ""
-                                                }`}
-                                        >
-                                            <Heart className={`h-4 w-4 ${post.isLiked ? "fill-current" : ""}`} />
-                                            <span>Thích</span>
-                                        </Button>
-                                    </div>
-
-                                    <div className="flex items-center space-x-1">
-                                        <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                                            <MessageCircle className="h-4 w-4" />
-                                            <span>Bình luận</span>
-                                        </Button>
-                                    </div>
-
-                                    <div className="flex items-center space-x-1">
-                                        <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                                            <Share2 className="h-4 w-4" />
-                                            <span>Chia sẻ</span>
-                                        </Button>
-                                    </div>
-
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handlePostAction(post.id, "bookmark")}
-                                        className={`flex items-center space-x-2 ${post.isBookmarked ? "text-yellow-600" : ""
-                                            }`}
-                                    >
-                                        <Bookmark className={`h-4 w-4 ${post.isBookmarked ? "fill-current" : ""}`} />
-                                        <span>Lưu</span>
-                                    </Button>
-                                </div>
                             </CardContent>
                         </Card>
                     ))}
+
+                    {hasMorePosts && !isLoadingPosts && posts.length > 0 && (
+                        <div className="flex justify-center py-6">
+                            <Button onClick={handleLoadMore} variant="outline" className="flex items-center">
+                                <Loader2 className="h-4 w-4 mr-2" /> Tải thêm bài viết
+                            </Button>
+                        </div>
+                    )}
+
+                    {isLoadingPosts && currentPage > 1 && (
+                        <div className="flex justify-center py-6">
+                            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+                            <span className="ml-2 text-gray-500">Đang tải thêm...</span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

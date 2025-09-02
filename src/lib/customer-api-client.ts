@@ -478,6 +478,14 @@ export const createGroup = async (data: {
     groupAvatarUrl?: string;
 }) => {
     try {
+        // Build payload without undefined fields
+        const primaryPayload: Record<string, any> = {
+            groupName: data.groupName,
+            description: data.description ?? "",
+            groupType: data.groupType,
+        };
+        if (data.groupAvatarUrl) primaryPayload.groupAvatarUrl = data.groupAvatarUrl;
+
         const response = await customerApiClient.post<CustomerApiResponse<{
             groupId: string;
             groupName: string;
@@ -487,7 +495,7 @@ export const createGroup = async (data: {
             memberCount: number;
         }>>(
             "/groups",
-            data,
+            primaryPayload,
             {
                 headers: {
                     'Content-Type': 'application/json'
@@ -496,8 +504,39 @@ export const createGroup = async (data: {
         );
 
         return response.data;
-    } catch (error) {
-        throw error;
+    } catch (error: any) {
+        // If validation failed, try alternate field casing once
+        if (error?.response?.status === 400) {
+            try {
+                const altPayload: Record<string, any> = {
+                    name: data.groupName,
+                    description: data.description ?? "",
+                    type: data.groupType,
+                };
+                if (data.groupAvatarUrl) altPayload.avatarUrl = data.groupAvatarUrl;
+
+                const retry = await customerApiClient.post<CustomerApiResponse<any>>(
+                    "/groups",
+                    altPayload,
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
+                return retry.data;
+            } catch (retryErr: any) {
+                const resp = retryErr?.response;
+                return {
+                    success: false,
+                    message: resp?.data?.errors?.[0]?.message || resp?.data?.message || "Không thể tạo nhóm (400)",
+                    data: null
+                };
+            }
+        }
+
+        const resp = error?.response;
+        return {
+            success: false,
+            message: resp?.data?.errors?.[0]?.message || resp?.data?.message || error?.message || "Không thể tạo nhóm",
+            data: null
+        };
     }
 };
 
@@ -1433,19 +1472,20 @@ export const getGroupPosts = async (
             const mappedPosts = responseData.data.items.map((dbPost: any) => {
                 console.log("Mapping post:", dbPost);
 
+                const authorObj = dbPost.author || {};
                 const mappedPost = {
                     id: dbPost.postId?.toString() || dbPost.id || dbPost.PostID?.toString(),
                     postId: dbPost.postId || dbPost.PostID,
                     title: dbPost.title || dbPost.Title || "Không có tiêu đề",
-                    content: dbPost.content || dbPost.Content || "",
+                    content: dbPost.content || dbPost.Content || dbPost.contentSnippet || "",
                     contentMarkdown: dbPost.contentMarkdown || dbPost.content || dbPost.Content || "",
-                    authorId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || "unknown",
-                    authorName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || "Unknown User",
-                    authorAvatar: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || "",
+                    authorId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || authorObj.userId || "unknown",
+                    authorName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || authorObj.fullName || authorObj.displayName || "Unknown User",
+                    authorAvatar: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || authorObj.avatarUrl || "",
                     author: {
-                        userId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || "unknown",
-                        displayName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || "Unknown User",
-                        avatarUrl: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || ""
+                        userId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || authorObj.userId || "unknown",
+                        displayName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || authorObj.fullName || authorObj.displayName || "Unknown User",
+                        avatarUrl: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || authorObj.avatarUrl || ""
                     },
                     groupId: dbPost.groupId || dbPost.GroupID || groupId,
                     likeCount: dbPost.likeCount || dbPost.LikeCount || 0,
@@ -1656,19 +1696,20 @@ export const getPostDetail = async (postId: string): Promise<CustomerApiResponse
             const dbPost = response.data.data;
             console.log("Raw post detail:", dbPost);
 
+            const authorObj = dbPost.author || {};
             const mappedPost = {
                 id: dbPost.postId?.toString() || dbPost.id || dbPost.PostID?.toString(),
                 postId: dbPost.postId || dbPost.PostID,
                 title: dbPost.title || dbPost.Title || "Không có tiêu đề",
                 content: dbPost.content || dbPost.Content || "",
                 contentMarkdown: dbPost.contentMarkdown || dbPost.content || dbPost.Content || "",
-                authorId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || "unknown",
-                authorName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || "Unknown User",
-                authorAvatar: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || "",
+                authorId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || authorObj.userId || "unknown",
+                authorName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || authorObj.fullName || authorObj.displayName || "Unknown User",
+                authorAvatar: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || authorObj.avatarUrl || "",
                 author: {
-                    userId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || "unknown",
-                    displayName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || "Unknown User",
-                    avatarUrl: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || ""
+                    userId: dbPost.authorUserId || dbPost.authorId || dbPost.AuthorUserID || authorObj.userId || "unknown",
+                    displayName: dbPost.authorDisplayName || dbPost.authorName || dbPost.AuthorDisplayName || authorObj.fullName || authorObj.displayName || "Unknown User",
+                    avatarUrl: dbPost.authorAvatarUrl || dbPost.authorAvatar || dbPost.AuthorAvatarUrl || authorObj.avatarUrl || ""
                 },
                 groupId: dbPost.groupId || dbPost.GroupID,
                 likeCount: dbPost.likeCount || dbPost.LikeCount || 0,
@@ -1679,17 +1720,18 @@ export const getPostDetail = async (postId: string): Promise<CustomerApiResponse
                 updatedAt: dbPost.updatedAt || dbPost.UpdatedAt,
                 comments: dbPost.comments?.map((dbComment: any) => {
                     console.log("Mapping comment:", dbComment);
+                    const cAuthor = dbComment.author || {};
                     return {
                         id: dbComment.commentId?.toString() || dbComment.id || dbComment.CommentID?.toString(),
                         commentId: dbComment.commentId || dbComment.CommentID,
                         content: dbComment.content || dbComment.Content,
-                        authorId: dbComment.authorUserId || dbComment.authorId || dbComment.AuthorUserID || "unknown",
-                        authorName: dbComment.authorDisplayName || dbComment.authorName || dbComment.AuthorDisplayName || "Unknown User",
-                        authorAvatar: dbComment.authorAvatarUrl || dbComment.authorAvatar || dbComment.AuthorAvatarUrl || "",
+                        authorId: dbComment.authorUserId || dbComment.authorId || dbComment.AuthorUserID || cAuthor.userId || "unknown",
+                        authorName: dbComment.authorDisplayName || dbComment.authorName || dbComment.AuthorDisplayName || cAuthor.fullName || cAuthor.displayName || "Unknown User",
+                        authorAvatar: dbComment.authorAvatarUrl || dbComment.authorAvatar || dbComment.AuthorAvatarUrl || cAuthor.avatarUrl || "",
                         author: {
-                            userId: dbComment.authorUserId || dbComment.authorId || dbComment.AuthorUserID || "unknown",
-                            displayName: dbComment.authorDisplayName || dbComment.authorName || dbComment.AuthorDisplayName || "Unknown User",
-                            avatarUrl: dbComment.authorAvatarUrl || dbComment.authorAvatar || dbComment.AuthorAvatarUrl || ""
+                            userId: dbComment.authorUserId || dbComment.authorId || dbComment.AuthorUserID || cAuthor.userId || "unknown",
+                            displayName: dbComment.authorDisplayName || dbComment.authorName || dbComment.AuthorDisplayName || cAuthor.fullName || cAuthor.displayName || "Unknown User",
+                            avatarUrl: dbComment.authorAvatarUrl || dbComment.authorAvatar || dbComment.AuthorAvatarUrl || cAuthor.avatarUrl || ""
                         },
                         postId: dbComment.postId || dbComment.PostID,
                         parentCommentId: dbComment.parentCommentId || dbComment.ParentCommentID,
@@ -1721,5 +1763,92 @@ export const getPostDetail = async (postId: string): Promise<CustomerApiResponse
             message: error.response?.data?.message || "Không thể lấy chi tiết bài đăng",
             data: null
         };
+    }
+};
+
+// Test function để debug Community groups
+export const debugCommunityGroups = async () => {
+    try {
+        console.log("=== DEBUG COMMUNITY GROUPS ===");
+
+        // Test API call
+        const response = await getGroups();
+        console.log("Full API response:", response);
+
+        if (response.success && response.data) {
+            let groupsData: any[] = [];
+
+            if (response.data.items && Array.isArray(response.data.items)) {
+                groupsData = response.data.items;
+            } else if (Array.isArray(response.data)) {
+                groupsData = response.data;
+            }
+
+            console.log("All groups from API:", groupsData);
+
+            // Check each group's type
+            groupsData.forEach((group, index) => {
+                console.log(`Group ${index + 1}:`, {
+                    id: group.groupId || group.GroupID,
+                    name: group.groupName || group.GroupName,
+                    type: group.groupType || group.GroupType,
+                    description: group.description || group.Description
+                });
+            });
+
+            // Filter Community groups
+            const communityGroups = groupsData.filter(group => {
+                const groupType = group.groupType || group.GroupType;
+                const isCommunity = groupType === "Community";
+                console.log(`Group "${group.groupName || group.GroupName}": type="${groupType}", isCommunity=${isCommunity}`);
+                return isCommunity;
+            });
+
+            console.log("Filtered Community groups:", communityGroups);
+            return communityGroups;
+        } else {
+            console.log("API response not successful:", response);
+            return [];
+        }
+    } catch (error) {
+        console.error("Error debugging community groups:", error);
+        return [];
+    }
+};
+
+// Function để test API endpoint trực tiếp
+export const testGroupsAPI = async () => {
+    try {
+        console.log("=== TESTING GROUPS API ===");
+
+        // Test /me/groups endpoint
+        try {
+            console.log("Testing /me/groups...");
+            const response = await customerApiClient.get("/me/groups");
+            console.log("/me/groups response:", response.data);
+        } catch (error: any) {
+            console.error("/me/groups error:", error.response?.status, error.response?.data);
+        }
+
+        // Test /groups endpoint
+        try {
+            console.log("Testing /groups...");
+            const response = await customerApiClient.get("/groups");
+            console.log("/groups response:", response.data);
+        } catch (error: any) {
+            console.error("/groups error:", error.response?.status, error.response?.data);
+        }
+
+        // Test /groups with Community filter
+        try {
+            console.log("Testing /groups?type=Community...");
+            const response = await customerApiClient.get("/groups?type=Community");
+            console.log("/groups?type=Community response:", response.data);
+        } catch (error: any) {
+            console.error("/groups?type=Community error:", error.response?.status, error.response?.data);
+        }
+
+    } catch (error) {
+        console.error("Error testing groups API:", error);
     }
 };

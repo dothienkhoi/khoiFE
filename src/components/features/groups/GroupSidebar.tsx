@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { getGroups } from "@/lib/customer-api-client";
+import { safeToLowerCase } from "@/lib/utils";
 
 interface Group {
     groupId: string;
@@ -33,9 +34,27 @@ export function GroupSidebar({ onGroupSelect }: GroupSidebarProps) {
                 const response = await getGroups();
 
                 if (response.success && response.data && response.data.items && Array.isArray(response.data.items)) {
-                    setGroups(response.data.items);
+                    // Validate and filter out invalid groups and exclude Community type
+                    const validGroups = response.data.items.filter(group =>
+                        group &&
+                        typeof group === 'object' &&
+                        group.groupId &&
+                        group.groupName &&
+                        (group.description !== undefined) &&
+                        (group.groupType || group.GroupType) !== "Community"
+                    );
+                    setGroups(validGroups);
                 } else if (response.success && response.data && Array.isArray(response.data)) {
-                    setGroups(response.data);
+                    // Validate and filter out invalid groups and exclude Community type
+                    const validGroups = response.data.filter(group =>
+                        group &&
+                        typeof group === 'object' &&
+                        group.groupId &&
+                        group.groupName &&
+                        (group.description !== undefined) &&
+                        (group.groupType || group.GroupType) !== "Community"
+                    );
+                    setGroups(validGroups);
                 } else {
                     setGroups([]);
                 }
@@ -49,11 +68,13 @@ export function GroupSidebar({ onGroupSelect }: GroupSidebarProps) {
         fetchGroups();
     }, []);
 
-    // Filter groups based on search term
+    // Filter groups based on search term with safe null checks
     const filteredGroups = Array.isArray(groups) ? groups.filter(group =>
-        group && group.groupName && group.description &&
-        group.groupName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        group.description.toLowerCase().includes(searchTerm.toLowerCase())
+        group &&
+        group.groupName &&
+        group.description &&
+        (safeToLowerCase(group.groupName).includes(safeToLowerCase(searchTerm)) ||
+            safeToLowerCase(group.description).includes(safeToLowerCase(searchTerm)))
     ) : [];
 
     // Handle group selection
@@ -66,13 +87,32 @@ export function GroupSidebar({ onGroupSelect }: GroupSidebarProps) {
         try {
             const response = await getGroups();
             if (response.success && response.data && response.data.items && Array.isArray(response.data.items)) {
-                setGroups(response.data.items);
+                // Validate and filter out invalid groups and exclude Community type
+                const validGroups = response.data.items.filter(group =>
+                    group &&
+                    typeof group === 'object' &&
+                    group.groupId &&
+                    group.groupName &&
+                    (group.description !== undefined) &&
+                    (group.groupType || group.GroupType) !== "Community"
+                );
+                setGroups(validGroups);
             } else if (response.success && response.data && Array.isArray(response.data)) {
-                setGroups(response.data);
+                // Validate and filter out invalid groups and exclude Community type
+                const validGroups = response.data.filter(group =>
+                    group &&
+                    typeof group === 'object' &&
+                    group.groupId &&
+                    group.groupName &&
+                    (group.description !== undefined) &&
+                    (group.groupType || group.GroupType) !== "Community"
+                );
+                setGroups(validGroups);
             } else {
                 setGroups([]);
             }
         } catch (error) {
+            console.error("Error refreshing groups:", error);
             setGroups([]);
         }
     };
