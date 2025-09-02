@@ -105,3 +105,4 @@ console.log("Group type:", group.groupType, group.GroupType);
 2. **Xem console logs** để debug response
 3. **Update filter logic** nếu cần
 4. **Test tạo Community mới** và xem có hiển thị không
+

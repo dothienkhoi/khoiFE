@@ -139,3 +139,4 @@ curl -X POST "https://localhost:7007/api/v1/groups" \
 - Demo mode cho phép test UI mà không cần API hoạt động
 - Logging chi tiết giúp debug dễ dàng
 - Error handling comprehensive cho tất cả trường hợp
+

@@ -107,3 +107,4 @@ Communities sidebar sẽ hiển thị:
 - ✅ "Duy" (Community)  
 - ✅ "Quang hay quá" (Community)
 - ❌ Không hiển thị "Private" hoặc "Public" groups
+

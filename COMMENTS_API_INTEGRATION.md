@@ -289,3 +289,4 @@ const toggleComments = (postId: string) => {
 ```
 
 The Community posts section now provides a complete, interactive experience with full comment functionality, real API integration, and a beautiful, responsive interface! 🎉
+

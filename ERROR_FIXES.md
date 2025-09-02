@@ -103,3 +103,4 @@ NEXT_PUBLIC_API_BASE_URL=https://localhost:7007
 2. Log errors với context đầy đủ
 3. Set up alerts cho critical errors
 4. Monitor API response times và error rates
+
