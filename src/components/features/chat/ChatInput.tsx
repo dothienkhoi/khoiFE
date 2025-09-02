@@ -83,20 +83,20 @@ export function ChatInput({
         if (isTyping) {
             onTyping?.(true);
 
-            // Send typing indicator via SignalR if available
-            const chatHubUtils = (window as any).chatHubUtils;
-            if (chatHubUtils && chatHubUtils.isConnected() && conversationId) {
-                chatHubUtils.sendTypingIndicator(conversationId, true).catch(console.error);
-            }
+            // TODO: Send typing indicator via real-time service later
+            // const realTimeService = getRealTimeService();
+            // if (realTimeService && conversationId) {
+            //     realTimeService.sendTypingIndicator(conversationId, true);
+            // }
 
             timeout = setTimeout(() => {
                 setIsTyping(false);
                 onTyping?.(false);
 
-                // Send stop typing indicator
-                if (chatHubUtils && chatHubUtils.isConnected() && conversationId) {
-                    chatHubUtils.sendTypingIndicator(conversationId, false).catch(console.error);
-                }
+                // TODO: Send stop typing indicator via real-time service later
+                // if (realTimeService && conversationId) {
+                //     realTimeService.sendTypingIndicator(conversationId, false);
+                // }
             }, 1000);
         }
 

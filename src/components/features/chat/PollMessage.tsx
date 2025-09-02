@@ -39,7 +39,6 @@ interface PollDetailData {
 
 export function PollMessage({ message, isOwnMessage, conversationId }: PollMessageProps) {
     const [pollData, setPollData] = useState<PollDetailData | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [detailData, setDetailData] = useState<PollDetailData | null>(null);
     const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -56,8 +55,6 @@ export function PollMessage({ message, isOwnMessage, conversationId }: PollMessa
                     }
                 }
             } catch (error) {
-            } finally {
-                setIsLoading(false);
             }
         };
 
@@ -102,34 +99,7 @@ export function PollMessage({ message, isOwnMessage, conversationId }: PollMessa
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className={cn(
-                "w-full max-w-lg bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl p-6 space-y-5",
-                isOwnMessage ? "text-left" : "text-left"
-            )}>
-                <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-gray-700">
-                    <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500 rounded-xl shadow-lg animate-pulse">
-                        <BarChart3 className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="flex-1">
-                        <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                            Cuộc bình chọn
-                        </div>
-                    </div>
-                </div>
-                <div className="flex items-center justify-center py-12">
-                    <div className="flex flex-col items-center gap-4 text-gray-500 dark:text-gray-400">
-                        <div className="relative">
-                            <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-200 border-t-blue-600"></div>
-                            <div className="absolute inset-0 animate-ping rounded-full h-8 w-8 border-2 border-blue-400 opacity-20"></div>
-                        </div>
-                        <span className="text-base font-medium">Đang tải cuộc bình chọn...</span>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    // Loading state removed - poll will load silently
 
     if (!pollData) {
         return (

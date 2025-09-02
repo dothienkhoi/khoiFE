@@ -29,7 +29,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ conversationId, partnerName, partnerAvatar, onReplyToMessage }: MessageListProps) {
-    const { messages, setMessages, isLoadingMessages, setLoadingMessages } = useCustomerStore();
+    const { messages, setMessages } = useCustomerStore();
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -121,12 +121,10 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
     }, []);
 
     const loadMessages = async (beforeMessageId?: string) => {
-        if (isLoadingMessages || isLoadingMore) return;
+        if (isLoadingMore) return;
 
         if (beforeMessageId) {
             setIsLoadingMore(true);
-        } else {
-            setLoadingMessages(true);
         }
 
         try {
@@ -166,8 +164,6 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
         } finally {
             if (beforeMessageId) {
                 setIsLoadingMore(false);
-            } else {
-                setLoadingMessages(false);
             }
         }
     };
@@ -323,26 +319,11 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
         }
     }, [getAttachmentUrl, getAttachmentName, getAttachmentType, isImageUrl, partnerName, isOwnMessage, conversationId]);
 
-    if (isLoadingMessages) {
-        return (
-            <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                    <ChickenLoadingAnimation size="lg" className="mb-4" />
-                </div>
-            </div>
-        );
-    }
+    // Loading state removed - messages will load silently
 
     return (
         <div className="h-full flex flex-col">
-            {/* Loading indicator when scrolling to top */}
-            {isLoadingMore && (
-                <div className="p-4 border-b flex-shrink-0">
-                    <div className="flex items-center justify-center gap-3 py-3">
-                        <ChickenLoadingAnimation size="md" />
-                    </div>
-                </div>
-            )}
+            {/* Loading indicator removed - messages will load silently */}
 
             {/* Scrollable messages container */}
             <div

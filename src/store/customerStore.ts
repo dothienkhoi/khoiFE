@@ -40,7 +40,6 @@ interface CustomerState {
 
     // Loading states
     isLoadingContacts: boolean;
-    isLoadingMessages: boolean;
     isLoadingPosts: boolean;
     isPageTransitioning: boolean;
 
@@ -104,7 +103,6 @@ interface CustomerState {
 
     // Loading actions
     setLoadingContacts: (loading: boolean) => void;
-    setLoadingMessages: (loading: boolean) => void;
     setLoadingPosts: (loading: boolean) => void;
     setPageTransitioning: (loading: boolean) => void;
 
@@ -158,7 +156,6 @@ export const useCustomerStore = create<CustomerState>()(
             isProfileOpen: false,
             isCreatePostOpen: false,
             isLoadingContacts: false,
-            isLoadingMessages: false,
             isLoadingPosts: false,
             isPageTransitioning: false,
             settings: defaultSettings,
@@ -296,7 +293,6 @@ export const useCustomerStore = create<CustomerState>()(
 
             // Loading actions
             setLoadingContacts: (loading) => set({ isLoadingContacts: loading }),
-            setLoadingMessages: (loading) => set({ isLoadingMessages: loading }),
             setLoadingPosts: (loading) => set({ isLoadingPosts: loading }),
             setPageTransitioning: (loading: boolean) => set({ isPageTransitioning: loading }),
 
@@ -384,7 +380,6 @@ export const useCustomerStore = create<CustomerState>()(
                 isProfileOpen: false,
                 isCreatePostOpen: false,
                 isLoadingContacts: false,
-                isLoadingMessages: false,
                 isLoadingPosts: false,
                 isPageTransitioning: false,
                 settings: defaultSettings

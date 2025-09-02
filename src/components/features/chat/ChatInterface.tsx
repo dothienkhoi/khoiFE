@@ -48,15 +48,10 @@ export function ChatInterface() {
 
     // Join/leave conversation when active chat changes
     useEffect(() => {
-        if (conversationId && activeChatType === 'direct') {
-            const chatHubUtils = (window as any).chatHubUtils;
-            if (chatHubUtils) {
-                chatHubUtils.joinConversation(conversationId);
-                return () => {
-                    chatHubUtils.leaveConversation(conversationId);
-                };
-            }
-        }
+        // TODO: Implement real-time conversation management later
+        // if (conversationId && activeChatType === 'direct') {
+        //     // Real-time features will be implemented here
+        // }
     }, [conversationId, activeChatType]);
 
     // Handle file selection

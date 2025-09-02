@@ -48,15 +48,10 @@ export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupCha
 
     // Join/leave group chat when active chat changes
     useEffect(() => {
-        if (groupId) {
-            const chatHubUtils = (window as any).chatHubUtils;
-            if (chatHubUtils) {
-                chatHubUtils.joinConversation(Number(groupId));
-                return () => {
-                    chatHubUtils.leaveConversation(Number(groupId));
-                };
-            }
-        }
+        // TODO: Implement real-time group chat management later
+        // if (groupId) {
+        //     // Real-time features will be implemented here
+        // }
     }, [groupId]);
 
     // Handle file selection
@@ -125,44 +120,44 @@ export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupCha
         if (!groupId) return;
 
         try {
-            // Use SignalR for real-time messaging
-            const chatHubUtils = (window as any).chatHubUtils;
-            if (chatHubUtils && chatHubUtils.isConnected()) {
-                await chatHubUtils.sendMessage(Number(groupId), content, replyTo?.id);
-                console.log("Message sent via SignalR successfully");
-            } else {
-                // Fallback to REST API if SignalR not available
-                console.log("SignalR not available, using REST API fallback");
-                const response = await sendGroupMessage(groupId, {
-                    content,
-                    parentMessageId: replyTo?.id || null
-                });
+            // TODO: Implement real-time messaging later
+            // const realTimeService = getRealTimeService();
+            // if (realTimeService && realTimeService.isConnected()) {
+            //     await realTimeService.sendMessage(Number(groupId), content, replyTo?.id);
+            //     console.log("Message sent via real-time service successfully");
+            // } else {
+            //     console.log("Real-time service not available, using REST API fallback");
 
-                if (response.success) {
-                    console.log("Message sent via REST API successfully");
-                    // Add message to store immediately for optimistic update
-                    const newMessage: Message = {
-                        id: response.data.id || `temp-${Date.now()}`,
-                        conversationId: Number(groupId),
-                        content: content,
-                        sender: response.data.sender || {
-                            userId: "current-user",
-                            displayName: "Bạn",
-                            avatarUrl: ""
-                        },
-                        sentAt: new Date().toISOString(),
-                        messageType: "Text",
-                        parentMessageId: replyTo?.id || null,
-                        isDeleted: false,
-                        attachments: [],
-                        reactions: [],
-                        parentMessage: replyTo || null
-                    };
-                    addMessage(Number(groupId), newMessage);
-                } else {
-                    console.error("Failed to send message:", response.message);
-                    toast.error("Không thể gửi tin nhắn: " + (response.message || "Lỗi không xác định"));
-                }
+            // Fallback to REST API for now
+            const response = await sendGroupMessage(groupId, {
+                content,
+                parentMessageId: replyTo?.id || null
+            });
+
+            if (response.success) {
+                console.log("Message sent via REST API successfully");
+                // Add message to store immediately for optimistic update
+                const newMessage: Message = {
+                    id: response.data.id || `temp-${Date.now()}`,
+                    conversationId: Number(groupId),
+                    content: content,
+                    sender: response.data.sender || {
+                        userId: "current-user",
+                        displayName: "Bạn",
+                        avatarUrl: ""
+                    },
+                    sentAt: new Date().toISOString(),
+                    messageType: "Text",
+                    parentMessageId: replyTo?.id || null,
+                    isDeleted: false,
+                    attachments: [],
+                    reactions: [],
+                    parentMessage: replyTo || null
+                };
+                addMessage(Number(groupId), newMessage);
+            } else {
+                console.error("Failed to send message:", response.message);
+                toast.error("Không thể gửi tin nhắn: " + (response.message || "Lỗi không xác định"));
             }
         } catch (error) {
             console.error("Error sending message:", error);
