@@ -72,8 +72,12 @@ export function SignalRProvider({ children }: { children: ReactNode }) {
             console.error("[SignalR] Connection error:", error);
             setError(`Connection error: ${error.message}`);
 
-            // Only show toast for unexpected errors, not for intentional disconnects
-            if (error.message !== "Connection closed with an error.") {
+            // Only show toast for unexpected errors, not for intentional disconnects or server errors
+            const isServerError = error.message.includes("Server returned an error on close") ||
+              error.message.includes("Connection closed with an error") ||
+              error.message.includes("Internal server error");
+
+            if (!isServerError) {
               toast.error("Kết nối thông báo bị gián đoạn");
             }
           }
@@ -98,8 +102,25 @@ export function SignalRProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      // Start the connection
-      await hubConnection.start();
+      // Start the connection with timeout
+      const connectionPromise = hubConnection.start();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
+      );
+
+      try {
+        await Promise.race([connectionPromise, timeoutPromise]);
+      } catch (timeoutError) {
+        if (timeoutError instanceof Error && timeoutError.message.includes('timeout')) {
+          console.log("[SignalR] Connection timeout, this is normal in development");
+          // Don't treat timeout as a critical error in development
+          if (process.env.NODE_ENV === 'production') {
+            throw timeoutError;
+          }
+        } else {
+          throw timeoutError;
+        }
+      }
 
       if (isComponentMounted.current) {
         console.log("[SignalR] Connected successfully");
@@ -132,8 +153,19 @@ export function SignalRProvider({ children }: { children: ReactNode }) {
             }
           }, delay);
         } else {
-          console.log("[SignalR] Max reconnection attempts reached, stopping");
-          toast.error("Không thể kết nối thông báo sau nhiều lần thử");
+          console.log("[SignalR] Max reconnection attempts reached, disabling SignalR");
+          setError("SignalR disabled due to repeated connection failures");
+
+          // In development, don't show error toast for SignalR issues
+          if (process.env.NODE_ENV === 'production') {
+            toast.error("Không thể kết nối thông báo sau nhiều lần thử");
+          }
+
+          // Stop trying to reconnect
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
         }
       }
     }
@@ -167,11 +199,16 @@ export function SignalRProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     isComponentMounted.current = true;
 
-    // Tạm thời tắt SignalR để tránh lỗi
-    console.log("[SignalR] Temporarily disabled to avoid connection errors");
+    // Kiểm tra xem có cần kết nối SignalR không
+    const shouldConnect = process.env.NODE_ENV === 'production' ||
+      process.env.NEXT_PUBLIC_ENABLE_SIGNALR === 'true';
 
-    // Connect on mount - TẮT TẠM THỜI
-    // connect();
+    if (shouldConnect) {
+      console.log("[SignalR] Attempting to connect...");
+      connect();
+    } else {
+      console.log("[SignalR] SignalR connection disabled in development mode");
+    }
 
     // Cleanup on unmount
     return () => {
