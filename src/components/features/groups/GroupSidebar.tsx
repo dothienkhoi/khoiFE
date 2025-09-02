@@ -114,12 +114,7 @@ export function GroupSidebar({ onGroupSelect }: GroupSidebarProps) {
 
             {/* Groups List */}
             <div className="flex-1 overflow-y-auto">
-                {isLoading ? (
-                    <div className="p-4 text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ad46ff] mx-auto"></div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Đang tải nhóm...</p>
-                    </div>
-                ) : filteredGroups.length > 0 ? (
+                {filteredGroups.length > 0 ? (
                     <div className="p-2">
                         {filteredGroups.map((group) => (
                             <div
