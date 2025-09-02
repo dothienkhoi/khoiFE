@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 
 import { CustomerSignalRProvider } from "@/components/providers/CustomerSignalRProvider";
-import { ChatHubProvider } from "@/components/providers/ChatHubProvider";
 import { CustomerSidebar } from "@/layout/customer/CustomerSidebar";
 import { NotificationDropdown } from "@/components/shared/NotificationDropdown";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
@@ -39,22 +38,20 @@ export default function CustomerLayout({
 
   return (
     <CustomerSignalRProvider>
-      <ChatHubProvider>
-        <div className="flex w-full bg-white dark:bg-gray-900">
-          {/* --- Sidebar cho Desktop --- */}
-          <aside className="hidden md:block">
-            <CustomerSidebar isCollapsed={!isSidebarOpen} />
-          </aside>
+      <div className="flex w-full bg-white dark:bg-gray-900">
+        {/* --- Sidebar cho Desktop --- */}
+        <aside className="hidden md:block">
+          <CustomerSidebar isCollapsed={!isSidebarOpen} />
+        </aside>
 
-          {/* --- Main Content Area --- */}
-          <div className="flex flex-col flex-1 min-h-screen">
-            {/* --- Main Content --- */}
-            <main className="flex flex-1 flex-col bg-gray-50 dark:bg-gray-800">
-              {children}
-            </main>
-          </div>
+        {/* --- Main Content Area --- */}
+        <div className="flex flex-col flex-1 min-h-screen">
+          {/* --- Main Content --- */}
+          <main className="flex flex-1 flex-col bg-gray-50 dark:bg-gray-800">
+            {children}
+          </main>
         </div>
-      </ChatHubProvider >
-    </CustomerSignalRProvider >
+      </div>
+    </CustomerSignalRProvider>
   );
 }
