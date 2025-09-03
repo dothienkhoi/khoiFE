@@ -12,14 +12,13 @@ import { vi } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import {
     Image as ImageIcon,
-    File,
-    MoreHorizontal,
-    Reply,
-    Heart
+    File
 } from "lucide-react";
 import { PollMessage } from "./PollMessage";
 import { ImageGallery } from "./ImageGallery";
 import { ChickenLoadingAnimation, BouncingDots } from "@/components/ui/loading-animation";
+import { ReplyMessage } from "../boback/ReplyMessage";
+import { MessageReplyActions } from "../boback/MessageReplyActions";
 
 interface MessageListProps {
     conversationId: number;
@@ -328,7 +327,7 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
             {/* Scrollable messages container */}
             <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-y-auto p-4 scrollbar-hide"
+                className="flex-1 overflow-y-auto p-4 scrollbar-hide min-h-0"
                 onScroll={handleScroll}
                 style={{
                     scrollbarWidth: 'none', /* Firefox */
@@ -379,70 +378,90 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                         "group/message flex flex-col gap-1 max-w-[70%] w-fit",
                                         own ? "items-end" : "items-start"
                                     )}>
-
-                                        {/* Reply Preview */}
-                                        {message.parentMessage && message.parentMessage.sender && (
+                                        {/* Reply Container - Wrapped Layout */}
+                                        {message.parentMessage ? (
                                             <div className={cn(
-                                                "mb-2 p-2 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border-l-4 border-primary/60 text-xs shadow-sm",
-                                                own ? "text-right" : "text-left"
+                                                "border-2 border-primary/30 rounded-lg bg-gradient-to-br from-primary/5 to-primary/10 p-3 shadow-sm relative",
+                                                own ? "border-r-0 rounded-r-none" : "border-l-0 rounded-l-none"
                                             )}>
-                                                <div className="flex items-center gap-1 mb-1">
-                                                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-pulse"></div>
-                                                    <span className="text-primary font-semibold text-xs">
-                                                        Trả lời {message.parentMessage.sender.displayName || 'Người dùng'}
-                                                    </span>
+                                                {/* Reply Preview */}
+                                                <ReplyMessage
+                                                    parentMessage={message.parentMessage}
+                                                    isOwnMessage={own}
+                                                    onScrollToMessage={scrollToMessage}
+                                                />
+
+                                                {/* Current Message Bubble */}
+                                                <div className={cn(
+                                                    "flex items-end gap-1 mt-2",
+                                                    own ? "flex-row-reverse" : "flex-row"
+                                                )}>
+                                                    <div
+                                                        className={cn(
+                                                            "px-3 py-2 rounded-lg",
+                                                            own
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "bg-muted text-foreground"
+                                                        )}
+                                                    >
+                                                        {renderMessageContent(message)}
+                                                    </div>
+
+                                                    {/* Action buttons beside bubble */}
+                                                    <MessageReplyActions
+                                                        message={message}
+                                                        isOwnMessage={own}
+                                                        onReplyToMessage={onReplyToMessage}
+                                                    />
                                                 </div>
-                                                <div className="bg-background/90 rounded-md p-2 border border-primary/20 shadow-sm">
-                                                    <p className="text-muted-foreground line-clamp-1 text-xs font-medium">
-                                                        {message.parentMessage.content || 'Tin nhắn không có nội dung'}
-                                                    </p>
+
+                                                {/* Timestamp inside container */}
+                                                {message.sentAt && (
+                                                    <div className={cn(
+                                                        "text-[11px] text-muted-foreground mt-1",
+                                                        own ? "text-right" : "text-left"
+                                                    )}>
+                                                        {formatMessageTime(message.sentAt)}
+                                                    </div>
+                                                )}
+
+                                                {/* Reply Indicator Arrow */}
+                                                <div className={cn(
+                                                    "absolute w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent",
+                                                    own
+                                                        ? "right-[-8px] top-1/2 transform -translate-y-1/2 border-l-8 border-l-primary/30"
+                                                        : "left-[-8px] top-1/2 transform -translate-y-1/2 border-r-8 border-r-primary/30"
+                                                )}></div>
+                                            </div>
+                                        ) : (
+                                            /* Normal message without reply */
+                                            <div className={cn(
+                                                "flex items-end gap-1",
+                                                own ? "flex-row-reverse" : "flex-row"
+                                            )}>
+                                                {/* Message Bubble */}
+                                                <div
+                                                    className={cn(
+                                                        "px-3 py-2 rounded-lg",
+                                                        own
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "bg-muted text-foreground"
+                                                    )}
+                                                >
+                                                    {renderMessageContent(message)}
                                                 </div>
+
+                                                {/* Action buttons beside bubble - show for all messages */}
+                                                <MessageReplyActions
+                                                    message={message}
+                                                    isOwnMessage={own}
+                                                    onReplyToMessage={onReplyToMessage}
+                                                />
                                             </div>
                                         )}
 
-
-                                        <div className={cn(
-                                            "flex items-end gap-1",
-                                            own ? "flex-row-reverse" : "flex-row"
-                                        )}>
-                                            {/* Message Bubble */}
-                                            <div
-                                                className={cn(
-                                                    "px-3 py-2 rounded-lg",
-                                                    own
-                                                        ? "bg-primary text-primary-foreground"
-                                                        : "bg-muted text-foreground"
-                                                )}
-                                            >
-                                                {renderMessageContent(message)}
-                                            </div>
-
-                                            {/* Action buttons beside bubble - show for all messages */}
-                                            <div className="flex items-center gap-1 opacity-0 group-hover/message:opacity-100 transition-opacity">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0 hover:bg-accent/50"
-                                                    onClick={() => onReplyToMessage?.(message)}
-                                                    title="Trả lời tin nhắn"
-                                                >
-                                                    <Reply className="h-3 w-3" />
-                                                </Button>
-                                                {own && (
-                                                    <>
-                                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-accent/50">
-                                                            <Heart className="h-3 w-3" />
-                                                        </Button>
-                                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-accent/50">
-                                                            <MoreHorizontal className="h-3 w-3" />
-                                                        </Button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Timestamp below */}
-                                        {message.sentAt && (
+                                        {/* Timestamp below for normal messages */}
+                                        {!message.parentMessage && message.sentAt && (
                                             <div className={cn(
                                                 "text-[11px] text-muted-foreground",
                                                 own ? "self-end" : "self-start"

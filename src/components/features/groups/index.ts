@@ -1,3 +1,4 @@
 export { GroupSidebar } from './GroupSidebar';
-export { CreateGroupDialog } from './CreateGroupDialog';
 export { GroupChatInterface } from './GroupChatInterface';
+export { CreateGroupDialog } from './CreateGroupDialog';
+export { GroupItem } from "./GroupItem";

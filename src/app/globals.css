@@ -1,6 +1,19 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Hide scrollbar but keep scrolling functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  /* Internet Explorer 10+ */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+  /* Safari and Chrome */
+}
+
 /* Ensure dialogs are properly positioned and visible */
 [data-radix-dialog-content] {
   position: fixed !important;
@@ -49,6 +62,19 @@ main {
   main {
     margin-left: 0 !important;
   }
+
+  .chat-input-container {
+    min-height: 60px !important;
+    padding: 12px !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .chat-textarea {
+    min-height: 32px !important;
+    max-height: 96px !important;
+    border-radius: 8px !important;
+  }
 }
 
 /* Fix layout for chat and discover pages */
@@ -56,6 +82,8 @@ main {
 .discover-page-layout {
   margin-left: 0 !important;
   width: 100% !important;
+  height: 100vh !important;
+  overflow: hidden !important;
 }
 
 .chat-page-layout .w-80,
@@ -63,8 +91,9 @@ main {
   position: relative !important;
   left: auto !important;
   top: auto !important;
-  height: auto !important;
+  height: 100vh !important;
   z-index: auto !important;
+  overflow: hidden !important;
 }
 
 /* Ensure proper layout for all pages */
@@ -89,6 +118,72 @@ main {
 body,
 html {
   background-color: transparent !important;
+}
+
+/* Ensure chat input is always visible */
+.chat-input-container {
+  position: relative !important;
+  z-index: 10 !important;
+  min-height: 80px !important;
+  background: white !important;
+  border-radius: 16px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.dark .chat-input-container {
+  background: rgb(31 41 55) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Ensure textarea is properly sized */
+.chat-textarea {
+  min-height: 40px !important;
+  max-height: 128px !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Hide scrollbar for emoji picker */
+.scrollbar-hide {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* File upload loading animation */
+.file-upload-loading {
+  position: relative;
+  overflow: hidden;
+}
+
+.file-upload-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(173, 70, 255, 0.2), transparent);
+  animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    left: -100%;
+  }
+
+  100% {
+    left: 100%;
+  }
 }
 
 /* Ensure main layout has proper background */

@@ -368,8 +368,6 @@ export const getGroupConversationId = async (groupId: string, groupName?: string
     if (response.data.success) {
         const conversations = response.data.data.filter(conv => conv.conversationType === "Group");
 
-
-
         if (conversations.length === 0) {
             return {
                 success: false,
@@ -378,11 +376,8 @@ export const getGroupConversationId = async (groupId: string, groupName?: string
             };
         }
 
-        // Create a simple mapping based on group creation order
-        // This is a temporary solution until we have proper groupId-conversationId mapping from backend
-        let conversation = null;
-
         // Try to match by groupName first
+        let conversation = null;
         if (groupName) {
             conversation = conversations.find(conv =>
                 conv.displayName === groupName ||
@@ -471,66 +466,30 @@ export const getGroups = async () => {
     }
 };
 
+
+
 export const createGroup = async (data: {
     groupName: string;
     description?: string;
-    groupType: "Private" | "Public" | "Community";
+    groupType: "Public" | "Private";
     groupAvatarUrl?: string;
 }) => {
     try {
-        // Build payload without undefined fields
-        const primaryPayload: Record<string, any> = {
-            groupName: data.groupName,
-            description: data.description ?? "",
-            groupType: data.groupType,
-        };
-        if (data.groupAvatarUrl) primaryPayload.groupAvatarUrl = data.groupAvatarUrl;
-
         const response = await customerApiClient.post<CustomerApiResponse<{
             groupId: string;
             groupName: string;
-            description: string;
-            groupType: string;
-            groupAvatarUrl: string;
-            memberCount: number;
+            defaultConversationId: number;
         }>>(
             "/groups",
-            primaryPayload,
             {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                groupName: data.groupName.trim(),
+                description: data.description?.trim() || "",
+                groupType: data.groupType,
+                groupAvatarUrl: data.groupAvatarUrl || ""
             }
         );
-
         return response.data;
     } catch (error: any) {
-        // If validation failed, try alternate field casing once
-        if (error?.response?.status === 400) {
-            try {
-                const altPayload: Record<string, any> = {
-                    name: data.groupName,
-                    description: data.description ?? "",
-                    type: data.groupType,
-                };
-                if (data.groupAvatarUrl) altPayload.avatarUrl = data.groupAvatarUrl;
-
-                const retry = await customerApiClient.post<CustomerApiResponse<any>>(
-                    "/groups",
-                    altPayload,
-                    { headers: { 'Content-Type': 'application/json' } }
-                );
-                return retry.data;
-            } catch (retryErr: any) {
-                const resp = retryErr?.response;
-                return {
-                    success: false,
-                    message: resp?.data?.errors?.[0]?.message || resp?.data?.message || "Không thể tạo nhóm (400)",
-                    data: null
-                };
-            }
-        }
-
         const resp = error?.response;
         return {
             success: false,

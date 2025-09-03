@@ -23,6 +23,7 @@ import { ChatMessage as ChatMessageType } from "@/types/customer.types";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import { ReplyMessage } from "../boback/ReplyMessage";
 
 interface ChatMessageProps {
     message: ChatMessageType;
@@ -64,13 +65,18 @@ export function ChatMessage({
                 return (
                     <div className="break-words">
                         {message.replyTo && (
-                            <div className="mb-2 p-2 bg-muted/50 rounded text-sm border-l-2 border-primary">
-                                <p className="font-medium text-xs text-muted-foreground">
-                                    {message.replyTo.senderName}
-                                </p>
-                                <p className="text-muted-foreground truncate">
-                                    {message.replyTo.content}
-                                </p>
+                            <div className="mb-2 p-2 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border-l-4 border-primary/60 text-xs shadow-sm">
+                                <div className="flex items-center gap-1 mb-1">
+                                    <div className="w-2 h-2 bg-primary/60 rounded-full animate-pulse"></div>
+                                    <span className="text-primary font-semibold text-xs">
+                                        Trả lời {message.replyTo.senderName}
+                                    </span>
+                                </div>
+                                <div className="bg-background/90 rounded-md p-2 border border-primary/20 shadow-sm">
+                                    <p className="text-muted-foreground line-clamp-1 text-xs font-medium">
+                                        {message.replyTo.content}
+                                    </p>
+                                </div>
                             </div>
                         )}
                         <p className="whitespace-pre-wrap">{message.content}</p>

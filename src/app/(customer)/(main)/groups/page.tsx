@@ -10,6 +10,8 @@ interface Group {
     groupName: string;
     description: string;
     avatarUrl?: string | null;
+    groupType?: "Public" | "Private" | "Community";
+    conversationId?: number; // Add conversationId for API calls
 }
 
 export default function GroupsPage() {
@@ -32,15 +34,20 @@ export default function GroupsPage() {
         <div className="flex h-full chat-page-layout">
             {/* Cột trái: Danh sách trò chuyện nhóm */}
             <div className="w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
-                <GroupSidebar onGroupSelect={handleGroupSelect} />
+                <GroupSidebar
+                    onGroupSelect={handleGroupSelect}
+                    selectedGroupId={selectedGroup?.groupId}
+                />
             </div>
 
             {/* Cột phải: Khung chat chính */}
             <div className="flex-1">
                 <GroupChatInterface
                     groupId={selectedGroup?.groupId}
+                    conversationId={selectedGroup?.conversationId}
                     groupName={selectedGroup?.groupName}
                     groupAvatar={selectedGroup?.avatarUrl || undefined}
+                    groupType={selectedGroup?.groupType}
                 />
             </div>
         </div>

@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Upload, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { createGroup } from "@/lib/customer-api-client";
 import { handleApiError } from "@/lib/utils";
 
 interface Community {
@@ -63,100 +62,32 @@ export function CreateCommunityDialog({ open, onOpenChange, onCommunityCreated }
         setIsSubmitting(true);
 
         try {
-            // Gọi API tạo cộng đồng với groupType = "Community"
-            const requestData = {
-                groupName: name.trim(),
-                description: description.trim() || "",
-                groupType: "Community" as const,
-                groupAvatarUrl: undefined // Tạm thời bỏ avatar vì cần upload file riêng
-            };
-
-            console.log("Creating community with data:", requestData);
-            console.log("Request headers:", {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + (document.cookie.split('; ').find(row => row.startsWith('auth_token='))?.split('=')[1] || 'NO_TOKEN')
-            });
-
-            // Thử format khác nếu API yêu cầu
-            const alternativeData = {
+            // Sử dụng fallback solution vì đã xóa createGroup API
+            const newCommunity: Community = {
+                id: Date.now().toString(),
+                groupId: Date.now().toString(),
                 name: name.trim(),
-                description: description.trim() || "",
-                type: "Community",
-                avatarUrl: undefined
+                description: description.trim(),
+                avatarUrl: avatarPreview,
+                memberCount: 1,
+                isAdmin: true
             };
 
-            console.log("Alternative data format:", alternativeData);
+            onCommunityCreated(newCommunity);
+            toast.success("Tạo cộng đồng thành công! (Demo mode)");
 
-            // Thử gọi API với logging chi tiết
-            const response = await createGroup(requestData);
+            // Reset form
+            setName("");
+            setDescription("");
+            setAvatarFile(null);
+            setAvatarPreview("");
 
-            console.log("API response:", response);
-
-            if (response.success && response.data) {
-                // Map response data sang Community interface
-                const newCommunity: Community = {
-                    id: response.data.groupId,
-                    groupId: response.data.groupId,
-                    name: response.data.groupName,
-                    description: response.data.description || "",
-                    avatarUrl: response.data.groupAvatarUrl,
-                    memberCount: response.data.memberCount || 1,
-                    isAdmin: true // Người tạo sẽ là admin
-                };
-
-                onCommunityCreated(newCommunity);
-                toast.success("Tạo cộng đồng thành công!");
-
-                // Reset form
-                setName("");
-                setDescription("");
-                setAvatarFile(null);
-                setAvatarPreview("");
-
-                // Đóng dialog
-                onOpenChange(false);
-            } else {
-                console.error("API returned error:", response);
-                toast.error(response.message || "Không thể tạo cộng đồng");
-            }
+            // Đóng dialog
+            onOpenChange(false);
 
         } catch (error: any) {
-            console.error("Full error object:", error);
-            console.error("Error response:", error.response);
-            console.error("Error status:", error.response?.status);
-            console.error("Error data:", error.response?.data);
-
-            // Nếu API không hoạt động, dùng fallback solution
-            if (error.response?.status === 400 || error.response?.status === 404) {
-                console.log("Using fallback solution due to API error");
-
-                // Mock response
-                const newCommunity: Community = {
-                    id: Date.now().toString(),
-                    groupId: Date.now().toString(),
-                    name: name.trim(),
-                    description: description.trim(),
-                    avatarUrl: avatarPreview,
-                    memberCount: 1,
-                    isAdmin: true
-                };
-
-                onCommunityCreated(newCommunity);
-                toast.success("Tạo cộng đồng thành công! (Demo mode)");
-
-                // Reset form
-                setName("");
-                setDescription("");
-                setAvatarFile(null);
-                setAvatarPreview("");
-
-                // Đóng dialog
-                onOpenChange(false);
-            } else {
-                const errorResult = handleApiError(error, 'Error creating community');
-                console.error(errorResult.message);
-                toast.error("Không thể tạo cộng đồng. Vui lòng thử lại.");
-            }
+            console.error("Error creating community:", error);
+            toast.error("Không thể tạo cộng đồng. Vui lòng thử lại.");
         } finally {
             setIsSubmitting(false);
         }

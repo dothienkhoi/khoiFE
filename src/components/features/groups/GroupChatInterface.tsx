@@ -1,220 +1,149 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
+import { MessageCircle, Search, Phone, Video, Users, Settings, Lock, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { MessageList } from "../chat/MessageList";
 import { ChatInput } from "../chat/ChatInput";
+import { ReplyPreview } from "../boback/ReplyPreview";
 import { useCustomerStore } from "@/store/customerStore";
+import { useAuthStore } from "@/store/authStore";
 import { sendGroupMessage, uploadFilesToGroup } from "@/lib/customer-api-client";
 import { Message } from "@/types/customer.types";
-import { MessageCircle, Users, Settings, Search, Phone, Video } from "lucide-react";
 import { toast } from "sonner";
-import { FilePreviewGallery } from "../chat/FilePreviewGallery";
-
-interface FilePreview {
-    url: string;
-    name: string;
-    size: number;
-    type: string;
-}
+import { cn } from "@/lib/utils";
 
 interface GroupChatInterfaceProps {
     groupId?: string;
+    conversationId?: number;
     groupName?: string;
     groupAvatar?: string;
+    groupType?: "Public" | "Private" | "Community";
 }
 
-export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupChatInterfaceProps) {
-    const {
-        activeChatId,
-        activeChatType,
-        messages,
-        addMessage
-    } = useCustomerStore();
+export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType }: GroupChatInterfaceProps) {
+    const { addMessage, updateMessage } = useCustomerStore();
+    const { user: currentUser } = useAuthStore();
 
-    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
-    const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
     const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
-    // Get current group messages
-    const currentMessages = useMemo(() => {
-        if (groupId) {
-            return messages[Number(groupId)] || [];
-        }
-        return [];
-    }, [messages, groupId]);
+    const actualConversationId = conversationId || (groupId ? Number(groupId) : null);
 
-    // Join/leave group chat when active chat changes
-    useEffect(() => {
-        // TODO: Implement real-time group chat management later
-        // if (groupId) {
-        //     // Real-time features will be implemented here
-        // }
-    }, [groupId]);
-
-    // Handle file selection
-    const handleFileSelect = useCallback((files: FileList | null) => {
-        if (!files) return;
-
-        const newFiles = Array.from(files);
-        const maxFiles = 5;
-        const maxSize = 25 * 1024 * 1024; // 25MB
-
-        // Check file limit
-        if (selectedFiles.length + newFiles.length > maxFiles) {
-            alert(`Bạn chỉ có thể chọn tối đa ${maxFiles} file. Hiện tại đã có ${selectedFiles.length} file.`);
-            return;
-        }
-
-        // Validate file size
-        const validFiles = newFiles.filter(file => {
-            if (file.size > maxSize) {
-                alert(`File "${file.name}" quá lớn. Kích thước tối đa là 25MB.`);
-                return false;
-            }
-            return true;
-        });
-
-        // Create preview URLs for images
-        const newPreviews = validFiles.map(file => ({
-            url: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
-            name: file.name,
-            size: file.size,
-            type: file.type
-        }));
-
-        setSelectedFiles(prev => [...prev, ...validFiles]);
-        setFilePreviews(prev => [...prev, ...newPreviews]);
-    }, [selectedFiles.length]);
-
-    // Remove file from selection
-    const removeFile = useCallback((index: number) => {
-        setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-        setFilePreviews(prev => {
-            const newPreviews = prev.filter((_, i) => i !== index);
-            // Clean up URL for removed image
-            if (prev[index]?.url) {
-                URL.revokeObjectURL(prev[index].url);
-            }
-            return newPreviews;
-        });
-    }, []);
-
-    // Remove all files
-    const removeAllFiles = useCallback(() => {
-        setSelectedFiles([]);
-        setFilePreviews(prev => {
-            prev.forEach(preview => {
-                if (preview.url) {
-                    URL.revokeObjectURL(preview.url);
-                }
-            });
-            return [];
-        });
-    }, []);
-
-    // Handle send text message
-    const handleSendText = useCallback(async (content: string, replyTo?: Message) => {
-        if (!groupId) return;
-
-        try {
-            // TODO: Implement real-time messaging later
-            // const realTimeService = getRealTimeService();
-            // if (realTimeService && realTimeService.isConnected()) {
-            //     await realTimeService.sendMessage(Number(groupId), content, replyTo?.id);
-            //     console.log("Message sent via real-time service successfully");
-            // } else {
-            //     console.log("Real-time service not available, using REST API fallback");
-
-            // Fallback to REST API for now
-            const response = await sendGroupMessage(groupId, {
-                content,
-                parentMessageId: replyTo?.id || null
-            });
-
-            if (response.success) {
-                console.log("Message sent via REST API successfully");
-                // Add message to store immediately for optimistic update
-                const newMessage: Message = {
-                    id: response.data.id || `temp-${Date.now()}`,
-                    conversationId: Number(groupId),
-                    content: content,
-                    sender: response.data.sender || {
-                        userId: "current-user",
-                        displayName: "Bạn",
-                        avatarUrl: ""
-                    },
-                    sentAt: new Date().toISOString(),
-                    messageType: "Text",
-                    parentMessageId: replyTo?.id || null,
-                    isDeleted: false,
-                    attachments: [],
-                    reactions: [],
-                    parentMessage: replyTo || null
+    // Get group type display info
+    const getGroupTypeInfo = (groupType?: string) => {
+        switch (groupType) {
+            case "Private":
+                return {
+                    label: "Riêng tư",
+                    icon: Lock,
+                    color: "bg-[#ad46ff]",
+                    textColor: "text-[#ad46ff]",
+                    bgColor: "bg-[#ad46ff]/10"
                 };
-                addMessage(Number(groupId), newMessage);
-            } else {
-                console.error("Failed to send message:", response.message);
-                toast.error("Không thể gửi tin nhắn: " + (response.message || "Lỗi không xác định"));
-            }
-        } catch (error) {
-            console.error("Error sending message:", error);
-
-            // Hiển thị thông báo lỗi chi tiết hơn
-            if (error instanceof Error) {
-                if (error.message.includes("Backend chưa hỗ trợ gửi tin nhắn nhóm với GUID")) {
-                    toast.error("Tính năng gửi tin nhắn nhóm chưa được hỗ trợ. Vui lòng liên hệ admin.");
-                } else {
-                    toast.error("Không thể gửi tin nhắn: " + error.message);
-                }
-            } else {
-                toast.error("Không thể gửi tin nhắn. Vui lòng thử lại.");
-            }
+            case "Public":
+            default:
+                return {
+                    label: "Công khai",
+                    icon: Globe,
+                    color: "bg-[#1447e6]",
+                    textColor: "text-[#1447e6]",
+                    bgColor: "bg-[#1447e6]/10"
+                };
         }
-    }, [groupId, addMessage]);
+    };
 
-    // Handle send files
-    const handleSendFiles = useCallback(async () => {
-        if (!groupId || selectedFiles.length === 0) return;
+    // Handle sending text message
+    const handleSendText = useCallback(async (content: string, replyTo?: Message) => {
+        if (!actualConversationId) return;
 
-        setIsUploading(true);
         try {
-            const response = await uploadFilesToGroup(groupId, selectedFiles);
+            // Create optimistic message first
+            const optimisticMessage: Message = {
+                id: `temp-${Date.now()}`,
+                conversationId: actualConversationId!,
+                content,
+                messageType: 'Text',
+                sender: {
+                    userId: currentUser?.id || 'current-user',
+                    displayName: currentUser?.fullName || 'Bạn',
+                    avatarUrl: currentUser?.avatarUrl || null
+                },
+                sentAt: new Date().toISOString(),
+                isDeleted: false,
+                attachments: [],
+                reactions: [],
+                parentMessageId: replyTo?.id || null,
+                parentMessage: replyTo || null
+            };
 
-            if (response.success) {
-                // Add messages to store
-                response.data.forEach(message => {
-                    addMessage(
-                        Number(groupId),
-                        message as unknown as Message
-                    );
+            // Add optimistic message to UI immediately
+            addMessage(actualConversationId!, optimisticMessage);
+
+            // Send message via API
+            const response = await sendGroupMessage(groupId!, {
+                content,
+                parentMessageId: replyTo?.id || undefined
+            });
+
+            if (response.success && response.data) {
+                // Replace optimistic message with real message from API
+                const realMessage = response.data as Message;
+
+                // Update the optimistic message with real data
+                updateMessage(actualConversationId!, optimisticMessage.id, {
+                    id: realMessage.id,
+                    sentAt: realMessage.sentAt,
+                    sender: realMessage.sender,
+                    // Keep other fields from optimistic message
                 });
 
-                // Clear files after successful send
-                removeAllFiles();
+                // Clear reply state after successful send
+                if (replyTo) {
+                    setReplyToMessage(null);
+                }
+            } else {
+                // If API call failed, show error
+                toast.error(response.message || 'Không thể gửi tin nhắn');
             }
+        } catch (error) {
+            console.error('Error sending text message:', error);
+            toast.error('Không thể gửi tin nhắn. Vui lòng thử lại.');
+        }
+    }, [actualConversationId, addMessage, updateMessage, currentUser, setReplyToMessage, groupId]);
+
+    // Handle sending files
+    const handleSendFiles = useCallback(async () => {
+        if (!actualConversationId) return;
+
+        setIsUploading(true);
+
+        try {
+            // TODO: File upload is handled in ChatInput component
+            // This function is called when type === 'files' but ChatInput handles the actual upload
+            // We just need to show loading state here
         } catch (err) {
-            console.error("Error uploading files:", err);
+            toast.error('Không thể gửi file. Vui lòng thử lại.');
         } finally {
             setIsUploading(false);
         }
-    }, [groupId, selectedFiles, addMessage, removeAllFiles]);
+    }, [actualConversationId]);
 
     // Handle message input
     const handleMessageInput = useCallback((content: string, type: string, replyTo?: Message) => {
         if (type === 'text' && content.trim()) {
             handleSendText(content.trim(), replyTo);
-        } else if (type === 'files' && selectedFiles.length > 0) {
+        } else if (type === 'files') {
             handleSendFiles();
         }
-    }, [handleSendText, handleSendFiles, selectedFiles.length]);
+    }, [handleSendText, handleSendFiles]);
 
     // If no group is selected, show welcome screen
     if (!groupId || !groupName) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white dark:bg-gray-800">
+            <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
                 <div className="w-32 h-32 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-6">
                     <MessageCircle className="w-16 h-16 text-[#ad46ff]" />
                 </div>
@@ -234,6 +163,9 @@ export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupCha
         );
     }
 
+    const groupTypeInfo = getGroupTypeInfo(groupType);
+    const TypeIcon = groupTypeInfo.icon;
+
     return (
         <div className="flex-1 flex flex-col h-full">
             {/* Group Chat Header */}
@@ -247,7 +179,20 @@ export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupCha
                             </AvatarFallback>
                         </Avatar>
                         <div>
-                            <h2 className="font-semibold text-gray-900 dark:text-white">{groupName}</h2>
+                            <div className="flex items-center gap-2 mb-1">
+                                <h2 className="font-semibold text-gray-900 dark:text-white">{groupName}</h2>
+                                <Badge
+                                    variant="secondary"
+                                    className={cn(
+                                        "text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1",
+                                        groupTypeInfo.bgColor,
+                                        groupTypeInfo.textColor
+                                    )}
+                                >
+                                    <TypeIcon className="w-3 h-3" />
+                                    {groupTypeInfo.label}
+                                </Badge>
+                            </div>
                             <p className="text-sm text-gray-500 dark:text-gray-400">Nhóm chat</p>
                         </div>
                     </div>
@@ -272,19 +217,10 @@ export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupCha
                 </div>
             </div>
 
-            {/* File Preview */}
-            {selectedFiles.length > 0 && (
-                <FilePreviewGallery
-                    files={filePreviews}
-                    onRemoveFile={removeFile}
-                    onRemoveAll={removeAllFiles}
-                />
-            )}
-
             {/* Messages */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden min-h-0">
                 <MessageList
-                    conversationId={Number(groupId)}
+                    conversationId={actualConversationId!}
                     partnerName={groupName}
                     partnerAvatar={groupAvatar}
                     onReplyToMessage={setReplyToMessage}
@@ -292,10 +228,10 @@ export function GroupChatInterface({ groupId, groupName, groupAvatar }: GroupCha
             </div>
 
             {/* Message input */}
-            <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+            <div className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 min-h-[80px] rounded-t-2xl">
                 <ChatInput
                     onSendMessage={handleMessageInput}
-                    conversationId={Number(groupId)}
+                    conversationId={actualConversationId!}
                     disabled={isUploading}
                     placeholder="Nhập tin nhắn..."
                     replyTo={replyToMessage as any}

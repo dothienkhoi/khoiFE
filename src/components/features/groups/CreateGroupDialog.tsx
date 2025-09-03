@@ -1,384 +1,343 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Upload, X } from "lucide-react";
-import { createGroup } from "@/lib/customer-api-client";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Upload, X, Loader2, Globe, Lock, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { createGroup } from "@/lib/customer-api-client";
 
 interface CreateGroupDialogProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onGroupCreated?: () => void;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onGroupCreated: (response?: any) => void;
 }
 
-export function CreateGroupDialog({ isOpen, onClose, onGroupCreated }: CreateGroupDialogProps) {
-    const [isLoading, setIsLoading] = useState(false);
-    const [groupName, setGroupName] = useState("");
+export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: CreateGroupDialogProps) {
+    const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [isPrivate, setIsPrivate] = useState(false);
+    const [groupType, setGroupType] = useState<"Public" | "Private">("Public");
     const [avatarFile, setAvatarFile] = useState<File | null>(null);
     const [avatarPreview, setAvatarPreview] = useState<string>("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showSuccess, setShowSuccess] = useState(false);
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
         if (file) {
-            // Validate file type
-            if (!file.type.startsWith('image/')) {
-                toast.error("Vui lòng chọn file ảnh");
+            if (file.size > 2 * 1024 * 1024) {
+                toast.error("Kích thước file không được vượt quá 2MB");
                 return;
             }
-
-            // Validate file size (max 5MB)
-            if (file.size > 5 * 1024 * 1024) {
-                toast.error("Kích thước ảnh không được vượt quá 5MB");
-                return;
-            }
-
             setAvatarFile(file);
-
-            // Create preview URL
-            const previewUrl = URL.createObjectURL(file);
-            setAvatarPreview(previewUrl);
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setAvatarPreview(e.target?.result as string);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
     const removeAvatar = () => {
         setAvatarFile(null);
         setAvatarPreview("");
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!groupName.trim()) {
+        if (!name.trim()) {
             toast.error("Vui lòng nhập tên nhóm");
             return;
         }
 
-        // Kiểm tra độ dài tên nhóm
-        if (groupName.trim().length < 2) {
+        if (name.trim().length < 2) {
             toast.error("Tên nhóm phải có ít nhất 2 ký tự");
             return;
         }
 
-        if (groupName.trim().length > 50) {
+        if (name.trim().length > 50) {
             toast.error("Tên nhóm không được vượt quá 50 ký tự");
             return;
         }
 
-        // Kiểm tra độ dài mô tả
-        if (description.trim().length > 200) {
-            toast.error("Mô tả không được vượt quá 200 ký tự");
-            return;
-        }
-
-        setIsLoading(true);
+        setIsSubmitting(true);
 
         try {
-            const groupData = {
-                groupName: groupName.trim(),
-                description: description.trim() || "",
-                groupType: (isPrivate ? "Private" : "Public") as "Private" | "Public" | "Community",
-                groupAvatarUrl: avatarFile ? "" : ""
-            };
+            // Gọi API tạo nhóm thật
+            const response = await createGroup({
+                groupName: name.trim(),
+                description: description.trim(),
+                groupType: groupType,
+                groupAvatarUrl: avatarPreview || undefined
+            });
 
-            const response = await createGroup(groupData);
+            if (response.success && response.data) {
+                // Hiển thị success message
+                setShowSuccess(true);
 
-            if (response.success) {
-                // Reset form
-                setGroupName("");
-                setDescription("");
-                setIsPrivate(false);
-                removeAvatar();
+                // Delay để user thấy success message
+                setTimeout(() => {
+                    onGroupCreated(response);
 
-                // Close dialog
-                onClose();
+                    // Reset form
+                    setName("");
+                    setDescription("");
+                    setGroupType("Public");
+                    setAvatarFile(null);
+                    setAvatarPreview("");
+                    setShowSuccess(false);
 
-                // Call callback to refresh groups list
-                if (onGroupCreated) {
-                    onGroupCreated();
-                }
-
-                // TODO: Refresh groups list or navigate to the new group
+                    // Close dialog
+                    onOpenChange(false);
+                }, 1500);
             } else {
                 toast.error(response.message || "Không thể tạo nhóm");
             }
+
         } catch (error: any) {
             console.error("Error creating group:", error);
-
-            // Log detailed error information
-            if (error.response) {
-                console.error("Error response:", error.response);
-                console.error("Error status:", error.response.status);
-                console.error("Error data:", error.response.data);
-
-                // Show more specific error message
-                if (error.response.status === 400) {
-                    const errorData = error.response.data;
-
-                    if (errorData && errorData.errors && errorData.errors.length > 0) {
-                        const firstError = errorData.errors[0];
-
-                        if (firstError.message) {
-                            toast.error(`Lỗi validation: ${firstError.message}`);
-                        } else if (firstError.errorMessage) {
-                            toast.error(`Lỗi validation: ${firstError.errorMessage}`);
-                        } else {
-                            toast.error("Dữ liệu không hợp lệ. Vui lòng kiểm tra lại thông tin nhóm.");
-                        }
-                    } else if (errorData && errorData.message) {
-                        toast.error(`Lỗi: ${errorData.message}`);
-                    } else {
-                        toast.error("Dữ liệu không hợp lệ. Vui lòng kiểm tra lại thông tin nhóm.");
-                    }
-                } else if (error.response.status === 401) {
-                    toast.error("Bạn cần đăng nhập để tạo nhóm");
-                } else if (error.response.status === 403) {
-                    toast.error("Bạn không có quyền tạo nhóm");
-                } else {
-                    toast.error(`Lỗi server: ${error.response.status}`);
-                }
-            } else if (error.request) {
-                console.error("Error request:", error.request);
-                toast.error("Không thể kết nối đến server. Vui lòng thử lại sau.");
-            } else {
-                toast.error("Có lỗi xảy ra khi tạo nhóm");
-            }
+            toast.error("Không thể tạo nhóm. Vui lòng thử lại.");
         } finally {
-            setIsLoading(false);
+            setIsSubmitting(false);
         }
     };
 
     const handleClose = () => {
-        if (!isLoading) {
-            onClose();
+        if (!isSubmitting) {
+            onOpenChange(false);
+            // Reset form when closing
+            setName("");
+            setDescription("");
+            setGroupType("Public");
+            setAvatarFile(null);
+            setAvatarPreview("");
+            setShowSuccess(false);
         }
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-[500px]">
+        <Dialog open={open} onOpenChange={handleClose}>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="text-xl font-bold">Tạo nhóm mới</DialogTitle>
+                    <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">
+                        Tạo nhóm mới
+                    </DialogTitle>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Avatar Upload */}
-                    <div className="flex flex-col items-center space-y-4">
+                {showSuccess ? (
+                    // Success Message
+                    <div className="flex flex-col items-center justify-center py-12 space-y-6">
                         <div className="relative">
-                            <Avatar className="w-20 h-20">
-                                {avatarPreview ? (
-                                    <AvatarImage src={avatarPreview} alt="Group avatar preview" />
-                                ) : (
-                                    <AvatarFallback className="text-lg font-semibold bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white">
-                                        {groupName ? groupName.charAt(0).toUpperCase() : "G"}
-                                    </AvatarFallback>
-                                )}
-                            </Avatar>
-
-                            {avatarPreview && (
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="destructive"
-                                    className="absolute -top-2 -right-2 w-6 h-6 p-0 rounded-full"
-                                    onClick={removeAvatar}
-                                >
-                                    <X className="w-3 h-3" />
-                                </Button>
-                            )}
+                            <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center animate-pulse">
+                                <CheckCircle className="w-12 h-12 text-white" />
+                            </div>
+                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-white rounded-full flex items-center justify-center">
+                                <div className="w-4 h-4 bg-green-500 rounded-full animate-ping"></div>
+                            </div>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="text-center space-y-2">
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                Tạo nhóm thành công!
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400">
+                                Nhóm "{name}" đã được tạo thành công và sẵn sàng sử dụng.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span>Đang chuyển hướng...</span>
+                        </div>
+                    </div>
+                ) : (
+                    // Form Content
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Left Column - Avatar & Basic Info */}
+                            <div className="space-y-6">
+                                {/* Avatar Upload */}
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Ảnh đại diện nhóm
+                                    </Label>
+                                    <div className="flex flex-col items-center space-y-4">
+                                        <div className="relative group">
+                                            <Avatar className="h-24 w-24 ring-4 ring-gray-200 dark:ring-gray-700 transition-all duration-300 group-hover:ring-[#ad46ff]/30">
+                                                {avatarPreview ? (
+                                                    <AvatarImage src={avatarPreview} className="object-cover" />
+                                                ) : (
+                                                    <AvatarFallback className="bg-gradient-to-br from-[#ad46ff] to-[#1447e6] text-white text-2xl font-bold">
+                                                        <Upload className="h-8 w-8" />
+                                                    </AvatarFallback>
+                                                )}
+                                            </Avatar>
+
+                                            {avatarPreview && (
+                                                <Button
+                                                    type="button"
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="absolute -top-2 -right-2 h-7 w-7 p-0 rounded-full shadow-lg hover:scale-110 transition-transform duration-200"
+                                                    onClick={removeAvatar}
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        <div className="text-center">
+                                            <Input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleAvatarChange}
+                                                className="hidden"
+                                                id="avatar-upload"
+                                            />
+                                            <Label
+                                                htmlFor="avatar-upload"
+                                                className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#ad46ff] transition-all duration-200"
+                                            >
+                                                <Upload className="h-4 w-4 mr-2" />
+                                                {avatarFile ? "Thay đổi ảnh" : "Chọn ảnh"}
+                                            </Label>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                                JPG, PNG hoặc GIF. Tối đa 2MB.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Group Name */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="name" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Tên nhóm *
+                                    </Label>
+                                    <Input
+                                        id="name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="Nhập tên nhóm..."
+                                        required
+                                        maxLength={50}
+                                        className="transition-all duration-200 focus:ring-2 focus:ring-[#ad46ff]/20 focus:border-[#ad46ff]"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {name.length}/50 ký tự
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Right Column - Description & Privacy */}
+                            <div className="space-y-6">
+                                {/* Description */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="description" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Mô tả (Tùy chọn)
+                                    </Label>
+                                    <Textarea
+                                        id="description"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        placeholder="Mô tả ngắn về nhóm..."
+                                        rows={4}
+                                        maxLength={200}
+                                        className="resize-none transition-all duration-200 focus:ring-2 focus:ring-[#ad46ff]/20 focus:border-[#ad46ff]"
+                                    />
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {description.length}/200 ký tự
+                                    </p>
+                                </div>
+
+                                {/* Privacy Settings */}
+                                <div className="space-y-3">
+                                    <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Quyền riêng tư
+                                    </Label>
+                                    <RadioGroup
+                                        value={groupType}
+                                        onValueChange={(value: string) => setGroupType(value as "Public" | "Private")}
+                                        className="space-y-3"
+                                    >
+                                        <div className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200 cursor-pointer">
+                                            <RadioGroupItem value="Public" id="public" className="text-[#1447e6]" />
+                                            <Label htmlFor="public" className="flex items-center space-x-3 cursor-pointer flex-1">
+                                                <div className={cn(
+                                                    "p-2 rounded-full",
+                                                    groupType === "Public"
+                                                        ? "bg-[#1447e6]/10 text-[#1447e6]"
+                                                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                                )}>
+                                                    <Globe className="h-4 w-4" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-gray-900 dark:text-white">Công khai</div>
+                                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                                        Bất kỳ ai cũng có thể tìm thấy và tham gia nhóm
+                                                    </div>
+                                                </div>
+                                            </Label>
+                                        </div>
+
+                                        <div className="flex items-center space-x-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200 cursor-pointer">
+                                            <RadioGroupItem value="Private" id="private" className="text-[#ad46ff]" />
+                                            <Label htmlFor="private" className="flex items-center space-x-3 cursor-pointer flex-1">
+                                                <div className={cn(
+                                                    "p-2 rounded-full",
+                                                    groupType === "Private"
+                                                        ? "bg-[#ad46ff]/10 text-[#ad46ff]"
+                                                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                                                )}>
+                                                    <Lock className="h-4 w-4" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-medium text-gray-900 dark:text-white">Riêng tư</div>
+                                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                                        Chỉ thành viên được mời mới có thể tham gia
+                                                    </div>
+                                                </div>
+                                            </Label>
+                                        </div>
+                                    </RadioGroup>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
                             <Button
                                 type="button"
                                 variant="outline"
-                                size="sm"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isLoading}
+                                onClick={handleClose}
+                                disabled={isSubmitting}
+                                className="px-6 py-2 transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800"
                             >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Chọn ảnh
+                                Hủy
                             </Button>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handleAvatarSelect}
-                                className="hidden"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Group Name */}
-                    <div className="space-y-2">
-                        <Label htmlFor="groupName">Tên nhóm *</Label>
-                        <Input
-                            id="groupName"
-                            value={groupName}
-                            onChange={(e) => setGroupName(e.target.value)}
-                            placeholder="Nhập tên nhóm..."
-                            disabled={isLoading}
-                            maxLength={50}
-                        />
-                    </div>
-
-                    {/* Description */}
-                    <div className="space-y-2">
-                        <Label htmlFor="description">Mô tả</Label>
-                        <Textarea
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Mô tả về nhóm..."
-                            disabled={isLoading}
-                            maxLength={200}
-                            rows={3}
-                        />
-                    </div>
-
-                    {/* Privacy Setting */}
-                    <div className="space-y-3">
-                        <Label htmlFor="privacy" className="text-base font-medium">Chế độ riêng tư</Label>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            {/* Public Option */}
-                            <div
-                                className={`relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${!isPrivate
-                                    ? 'border-[#1447e6] bg-[#1447e6]/5'
-                                    : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800'
-                                    }`}
-                                onClick={() => setIsPrivate(false)}
+                            <Button
+                                type="submit"
+                                disabled={isSubmitting || !name.trim() || name.trim().length < 2}
+                                className="px-6 py-2 bg-gradient-to-r from-[#ad46ff] to-[#1447e6] hover:from-[#ad46ff]/90 hover:to-[#1447e6]/90 text-white transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <input
-                                    type="radio"
-                                    name="privacy"
-                                    checked={!isPrivate}
-                                    onChange={() => setIsPrivate(false)}
-                                    className="sr-only"
-                                />
-
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!isPrivate
-                                        ? 'border-[#1447e6]'
-                                        : 'border-gray-300 dark:border-gray-500'
-                                        }`}>
-                                        {!isPrivate && (
-                                            <div className="w-2.5 h-2.5 bg-[#1447e6] rounded-full"></div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className="w-3 h-3 bg-[#1447e6] rounded-full"></div>
-                                            <span className={`font-medium ${!isPrivate
-                                                ? 'text-[#1447e6]'
-                                                : 'text-gray-700 dark:text-gray-300'
-                                                }`}>
-                                                Công khai
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Ai cũng có thể tham gia
-                                        </p>
-                                    </div>
-                                </div>
-
-
-                            </div>
-
-                            {/* Private Option */}
-                            <div
-                                className={`relative p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 ${isPrivate
-                                    ? 'border-[#ad46ff] bg-[#ad46ff]/5'
-                                    : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800'
-                                    }`}
-                                onClick={() => setIsPrivate(true)}
-                            >
-                                <input
-                                    type="radio"
-                                    name="privacy"
-                                    checked={isPrivate}
-                                    onChange={() => setIsPrivate(true)}
-                                    className="sr-only"
-                                />
-
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isPrivate
-                                        ? 'border-[#ad46ff]'
-                                        : 'border-gray-300 dark:border-gray-500'
-                                        }`}>
-                                        {isPrivate && (
-                                            <div className="w-2.5 h-2.5 bg-[#ad46ff] rounded-full"></div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className="w-3 h-3 bg-[#ad46ff] rounded-full"></div>
-                                            <span className={`font-medium ${isPrivate
-                                                ? 'text-[#ad46ff]'
-                                                : 'text-gray-700 dark:text-gray-300'
-                                                }`}>
-                                                Riêng tư
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            Chỉ thành viên mới có thể tham gia
-                                        </p>
-                                    </div>
-                                </div>
-
-                            </div>
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Đang tạo...
+                                    </>
+                                ) : (
+                                    "Tạo nhóm"
+                                )}
+                            </Button>
                         </div>
-
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                            {isPrivate
-                                ? "Nhóm riêng tư sẽ không hiển thị trong kết quả tìm kiếm công khai"
-                                : "Nhóm công khai sẽ hiển thị trong kết quả tìm kiếm và ai cũng có thể tham gia"
-                            }
-                        </p>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-3 pt-4">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleClose}
-                            disabled={isLoading}
-                            className="flex-1"
-                        >
-                            Hủy bỏ
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={isLoading || !groupName.trim()}
-                            className="flex-1 bg-gradient-to-r from-[#ad46ff] to-[#1447e6] hover:from-[#ad46ff]/90 hover:to-[#1447e6]/90"
-                        >
-                            {isLoading ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Đang tạo...
-                                </>
-                            ) : (
-                                "Tạo nhóm"
-                            )}
-                        </Button>
-                    </div>
-                </form>
+                    </form>
+                )}
             </DialogContent>
         </Dialog>
     );

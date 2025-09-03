@@ -22,7 +22,7 @@ export default function ChatPage() {
             </div>
 
             {/* Cột phải: Khung chat chính */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
                 <ChatInterface />
             </div>
         </div>
