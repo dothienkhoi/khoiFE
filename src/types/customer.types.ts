@@ -170,6 +170,25 @@ export interface FileUpload {
 }
 
 /**
+ * Group Types
+ */
+export interface Group {
+    groupId: string;
+    groupName: string;
+    description: string;
+    groupType?: "Public" | "Private" | "Community"; // Made optional since API doesn't provide it
+    groupAvatarUrl?: string;
+    memberCount: number;
+    createdAt: string;
+    createdBy: string;
+    isAdmin?: boolean;
+    lastMessagePreview?: string;
+    lastMessageTimestamp?: string;
+    unreadCount?: number;
+    conversationId?: number; // Add conversationId for API calls
+}
+
+/**
  * Group Member Types
  */
 export interface GroupMember {

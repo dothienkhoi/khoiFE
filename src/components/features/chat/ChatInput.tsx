@@ -8,9 +8,7 @@ import {
     Send,
     Paperclip,
     X,
-    Image,
     FileText,
-    Download,
     Smile
 } from "lucide-react";
 import { Message } from "@/types/customer.types";
@@ -18,6 +16,10 @@ import { cn } from "@/lib/utils";
 import { uploadFilesToConversation } from "@/lib/customer-api-client";
 import { toast } from "sonner";
 import { useCustomerStore } from "@/store/customerStore";
+import { EmojiPicker } from "../boback/EmojiPicker";
+import { AttachmentPopup } from "./AttachmentPopup";
+import { FilePreview } from "../boback/FilePreview";
+import { ReplyPreview } from "../boback/ReplyPreview";
 
 interface ChatInputProps {
     onSendMessage: (content: string, type: 'text' | 'image' | 'file', replyTo?: Message) => void;
@@ -51,15 +53,7 @@ export function ChatInput({
     const [isUploading, setIsUploading] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<FilePreview[]>([]);
 
-    // Format file size helper function
-    const formatFileSize = (bytes: number) => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        const size = parseFloat((bytes / Math.pow(k, i)).toFixed(2));
-        return `${size} ${sizes[i]}`;
-    };
+
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -160,6 +154,11 @@ export function ChatInput({
         // Validate message length
         if (hasContent && trimmedMessage.length > 100) {
             toast.error("Tin nhắn không được vượt quá 100 ký tự");
+            return;
+        }
+
+        // Validate file count
+        if (hasFiles && selectedFiles.length > 5) {
             return;
         }
 
@@ -278,8 +277,18 @@ export function ChatInput({
         if (!items) return;
 
         let hasFiles = false;
+        const maxFiles = 5;
+        const remainingSlots = maxFiles - selectedFiles.length;
 
-        for (let i = 0; i < items.length; i++) {
+        // Check if we can add more files
+        if (remainingSlots <= 0) {
+            return;
+        }
+
+        const newFilePreviews: FilePreview[] = [];
+        let processedCount = 0;
+
+        for (let i = 0; i < items.length && processedCount < remainingSlots; i++) {
             const item = items[i];
 
             // Handle images
@@ -287,7 +296,7 @@ export function ChatInput({
                 const file = item.getAsFile();
                 if (file) {
                     // Convert clipboard image to File object
-                    const imageFile = new File([file], `clipboard-image-${Date.now()}.png`, {
+                    const imageFile = new File([file], `clipboard-image-${Date.now()}-${processedCount}.png`, {
                         type: file.type || 'image/png'
                     });
 
@@ -299,8 +308,8 @@ export function ChatInput({
                         type: 'image'
                     };
 
-                    // Add to selected files silently
-                    setSelectedFiles(prev => [...prev, filePreview]);
+                    newFilePreviews.push(filePreview);
+                    processedCount++;
                     hasFiles = true;
                 }
             }
@@ -316,17 +325,21 @@ export function ChatInput({
                         type: file.type.startsWith('image/') ? 'image' : 'file'
                     };
 
-                    // Add to selected files silently
-                    setSelectedFiles(prev => [...prev, filePreview]);
+                    newFilePreviews.push(filePreview);
+                    processedCount++;
                     hasFiles = true;
                 }
             }
         }
 
-        // No toast notifications - silent operation
-        if (hasFiles) {
-            // Optionally add a subtle visual indicator instead of toast
-            // For now, just silently add the files
+        // Add valid files to selected files
+        if (newFilePreviews.length > 0) {
+            setSelectedFiles(prev => [...prev, ...newFilePreviews]);
+        }
+
+        // Show warning if some files were skipped
+        if (items.length > remainingSlots) {
+            // Silent validation - no toast, validation will be shown in dialog
         }
 
         // Handle text paste - check length limit
@@ -335,7 +348,7 @@ export function ChatInput({
             e.preventDefault();
             // Silent validation - no toast, just prevent paste
         }
-    }, [message, setSelectedFiles]);
+    }, [message, selectedFiles.length]);
 
     // Clear selected files and cleanup URLs
     const clearSelectedFiles = useCallback(() => {
@@ -351,26 +364,53 @@ export function ChatInput({
     const handleFileSelection = useCallback((files: FileList | null, type: 'image' | 'file') => {
         if (!files || files.length === 0) return;
 
-        const file = files[0];
         const maxSize = 10 * 1024 * 1024; // 10MB
+        const maxFiles = 5;
+        const remainingSlots = maxFiles - selectedFiles.length;
+        const filesToProcess = Math.min(files.length, remainingSlots);
 
-        // Validate file size
-        if (file.size > maxSize) {
-            toast.error(`File quá lớn. Kích thước tối đa là 10MB`);
+        // Check if we can add more files
+        if (remainingSlots <= 0) {
             return;
         }
 
-        // Validate image type for image uploads
-        if (type === 'image' && !file.type.startsWith('image/')) {
-            toast.error('Vui lòng chọn file hình ảnh');
-            return;
+        const newFilePreviews: FilePreview[] = [];
+        let hasError = false;
+
+        // Process each file
+        for (let i = 0; i < filesToProcess; i++) {
+            const file = files[i];
+
+            // Validate file size
+            if (file.size > maxSize) {
+                toast.error(`File "${file.name}" quá lớn. Kích thước tối đa là 10MB`);
+                hasError = true;
+                continue;
+            }
+
+            // Validate image type for image uploads
+            if (type === 'image' && !file.type.startsWith('image/')) {
+                toast.error(`File "${file.name}" không phải là hình ảnh`);
+                hasError = true;
+                continue;
+            }
+
+            // Create preview
+            const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+            const filePreview: FilePreview = { file, previewUrl, type };
+            newFilePreviews.push(filePreview);
         }
 
-        // Create preview
-        const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
-        const filePreview: FilePreview = { file, previewUrl, type };
+        // Add valid files to selected files
+        if (newFilePreviews.length > 0) {
+            setSelectedFiles(prev => [...prev, ...newFilePreviews]);
+        }
 
-        setSelectedFiles(prev => [...prev, filePreview]);
+        // Show warning if some files were skipped
+        if (files.length > remainingSlots) {
+            // Silent validation - no toast, validation will be shown in dialog
+        }
+
         setShowAttachments(false);
 
         // Reset input
@@ -379,7 +419,7 @@ export function ChatInput({
         } else if (type === 'file' && fileInputRef.current) {
             fileInputRef.current.value = '';
         }
-    }, []);
+    }, [selectedFiles.length]);
 
     // Remove specific file
     const removeFile = useCallback((index: number) => {
@@ -403,128 +443,31 @@ export function ChatInput({
         <div className="relative">
             {/* Reply Preview */}
             {replyTo && (
-                <div className="mb-3 p-3 bg-gradient-to-r from-primary/5 to-primary/10 rounded-lg border-l-4 border-primary shadow-lg">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                                <p className="font-semibold text-xs text-primary">
-                                    Trả lời {replyTo.sender?.displayName || 'Người dùng'}
-                                </p>
-                            </div>
-                            <div className="bg-background/90 rounded-md p-2 border border-primary/20 shadow-sm">
-                                {replyTo.content ? (
-                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                        {replyTo.content}
-                                    </p>
-                                ) : replyTo.attachments && replyTo.attachments.length > 0 ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 bg-muted rounded flex items-center justify-center">
-                                            <FileText className="h-3 w-3 text-muted-foreground" />
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">
-                                            {replyTo.attachments.length} tệp đính kèm
-                                        </span>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground italic">
-                                        Tin nhắn không có nội dung
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
-                            onClick={onCancelReply}
-                            title="Hủy trả lời"
-                        >
-                            <X className="h-3 w-3" />
-                        </Button>
-                    </div>
-                </div>
+                <ReplyPreview
+                    replyTo={replyTo}
+                    onCancelReply={onCancelReply}
+                />
             )}
 
             {/* File/Image Preview */}
-            {selectedFiles.length > 0 && (
-                <div className={cn(
-                    "mb-3 p-3 rounded-lg border transition-all duration-300",
-                    isUploading
-                        ? "bg-primary/5 border-primary/20 shadow-lg shadow-primary/10"
-                        : "bg-muted/50 border-border"
-                )}>
-                    <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-muted-foreground">
-                                File đã chọn ({selectedFiles.length})
-                            </span>
-                            {isUploading && (
-                                <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full border border-primary/20">
-                                    <div className="loader"></div>
-                                    <span className="text-xs font-medium text-primary">Đang tải lên...</span>
-                                </div>
-                            )}
-                        </div>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs text-muted-foreground hover:text-destructive"
-                            onClick={clearSelectedFiles}
-                            disabled={isUploading}
-                        >
-                            Xóa tất cả
-                        </Button>
-                    </div>
-
-                    <div className="space-y-2">
-                        {selectedFiles.map((filePreview, index) => (
-                            <div key={`${filePreview.file.name}-${index}`} className="flex items-center gap-3">
-                                {filePreview.previewUrl ? (
-                                    <img
-                                        src={filePreview.previewUrl}
-                                        alt="Preview"
-                                        className="w-16 h-16 object-cover rounded border"
-                                    />
-                                ) : (
-                                    <div className="w-16 h-16 bg-muted rounded border flex items-center justify-center">
-                                        <FileText className="h-6 w-6 text-muted-foreground" />
-                                    </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium truncate">{filePreview.file.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {formatFileSize(filePreview.file.size)}
-                                    </p>
-                                </div>
-
-
-
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => removeFile(index)}
-                                    disabled={isUploading}
-                                >
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+            <FilePreview
+                files={selectedFiles}
+                isUploading={isUploading}
+                onRemoveFile={removeFile}
+                onClearAll={clearSelectedFiles}
+                hideWhenPopupOpen={showAttachments}
+            />
 
             {/* Input Area */}
-            <div className="flex items-end gap-2 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+            <div className="flex items-end gap-3 p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-lg min-h-[60px] max-w-full chat-input-container border border-gray-100 dark:border-gray-700 hover:shadow-xl transition-all duration-300">
                 {/* Attachment Button */}
-                <div className="relative" ref={attachmentRef}>
+                <div className="relative flex-shrink-0" ref={attachmentRef}>
                     <Button
                         variant="ghost"
                         size="icon"
                         className={cn(
-                            "h-10 w-10 transition-all duration-200 hover:scale-105",
-                            showAttachments && "bg-accent text-accent-foreground shadow-md"
+                            "h-10 w-10 transition-all duration-300 hover:scale-110 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-950/20 hover:text-blue-600 dark:hover:text-blue-400",
+                            showAttachments && "bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 shadow-md"
                         )}
                         onClick={() => setShowAttachments(!showAttachments)}
                         disabled={disabled || isUploading}
@@ -533,74 +476,25 @@ export function ChatInput({
                     </Button>
 
                     {/* Attachment Popup */}
-                    {showAttachments && (
-                        <div className="absolute bottom-full left-0 mb-3 p-4 bg-background border rounded-xl shadow-2xl z-50 min-w-[320px]">
-                            {/* Header */}
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-sm text-foreground">Đính kèm tệp</h3>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 hover:bg-muted"
-                                    onClick={() => setShowAttachments(false)}
-                                    disabled={disabled || isUploading}
-                                >
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-
-                            {/* Attachment Options Grid */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <Button
-                                    variant="ghost"
-                                    className="w-full justify-start gap-3 h-auto p-4 hover:scale-105 transition-all duration-200 bg-blue-50 dark:bg-blue-950/20 hover:shadow-md border border-transparent hover:border-border"
-                                    onClick={() => {
-                                        imageInputRef.current?.click();
-                                        setShowAttachments(false);
-                                    }}
-                                    disabled={disabled || isUploading}
-                                >
-                                    <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/20">
-                                        <Image className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                    </div>
-                                    <div className="text-left">
-                                        <div className="font-medium text-sm text-blue-600 dark:text-blue-400">
-                                            Hình ảnh
-                                        </div>
-                                    </div>
-                                </Button>
-
-                                <Button
-                                    variant="ghost"
-                                    className="w-full justify-start gap-3 h-auto p-4 hover:scale-105 transition-all duration-200 bg-gray-50 dark:bg-gray-950/20 hover:shadow-md border border-transparent hover:border-border"
-                                    onClick={() => {
-                                        fileInputRef.current?.click();
-                                        setShowAttachments(false);
-                                    }}
-                                    disabled={disabled || isUploading}
-                                >
-                                    <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-950/20">
-                                        <Download className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                                    </div>
-                                    <div className="text-left">
-                                        <div className="font-medium text-sm text-gray-600 dark:text-gray-400">
-                                            File khác
-                                        </div>
-                                    </div>
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+                    <AttachmentPopup
+                        isOpen={showAttachments}
+                        onClose={() => setShowAttachments(false)}
+                        onImageSelect={() => imageInputRef.current?.click()}
+                        onFileSelect={() => fileInputRef.current?.click()}
+                        selectedFilesCount={selectedFiles.length}
+                        disabled={disabled}
+                        isUploading={isUploading}
+                    />
                 </div>
 
                 {/* Emoji Button */}
-                <div className="relative" ref={emojiPickerRef}>
+                <div className="relative flex-shrink-0" ref={emojiPickerRef}>
                     <Button
                         variant="ghost"
                         size="icon"
                         className={cn(
-                            "h-10 w-10 transition-all duration-200 hover:scale-105",
-                            showEmojiPicker && "bg-accent text-accent-foreground shadow-md"
+                            "h-10 w-10 transition-all duration-300 hover:scale-110 rounded-xl hover:bg-gradient-to-r hover:from-[#ad46ff]/10 hover:to-[#1447e6]/10 hover:text-[#ad46ff] dark:hover:text-[#1447e6]",
+                            showEmojiPicker && "bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 text-[#ad46ff] dark:text-[#1447e6] shadow-md"
                         )}
                         onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                         disabled={disabled || isUploading}
@@ -609,64 +503,20 @@ export function ChatInput({
                         <Smile className="h-4 w-4" />
                     </Button>
 
-                    {/* Emoji Picker Popup */}
-                    {showEmojiPicker && (
-                        <div className="absolute bottom-full left-0 mb-3 p-4 bg-background border rounded-xl shadow-2xl z-50 min-w-[280px]">
-                            {/* Header */}
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-semibold text-sm text-foreground">Chọn emoji</h3>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 hover:bg-muted"
-                                    onClick={() => setShowEmojiPicker(false)}
-                                    disabled={disabled || isUploading}
-                                >
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-
-                            {/* Emoji Grid */}
-                            <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto">
-                                {[
-                                    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
-                                    '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
-                                    '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜',
-                                    '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏',
-                                    '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
-                                    '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠',
-                                    '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨',
-                                    '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥',
-                                    '😶', '😐', '😑', '😯', '😦', '😧', '😮', '😲',
-                                    '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢',
-                                    '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '💩',
-                                    '👻', '💀', '☠️', '👽', '👾', '🤖', '😺', '😸',
-                                    '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '🙈',
-                                    '🙉', '🙊', '💌', '💘', '💝', '💖', '💗', '💙',
-                                    '💚', '❤️', '🧡', '💛', '💜', '🖤', '💯', '💢',
-                                    '💥', '💫', '💦', '💨', '🕳️', '💬', '🗨️', '🗯️',
-                                    '💭', '💤', '💮', '💯', '🎵', '🎶', '💤', '💤'
-                                ].map((emoji, index) => (
-                                    <Button
-                                        key={index}
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 p-0 text-lg hover:bg-accent hover:scale-110 transition-all duration-200"
-                                        onClick={() => insertEmoji(emoji)}
-                                        disabled={disabled || isUploading}
-                                    >
-                                        {emoji}
-                                    </Button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                    {/* Emoji Picker Component */}
+                    <EmojiPicker
+                        isOpen={showEmojiPicker}
+                        onClose={() => setShowEmojiPicker(false)}
+                        onEmojiSelect={insertEmoji}
+                        disabled={disabled || isUploading}
+                    />
                 </div>
 
                 {/* Hidden file inputs */}
                 <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     className="hidden"
                     onChange={(e) => handleFileSelection(e.target.files, 'file')}
                     accept="*/*"
@@ -674,13 +524,14 @@ export function ChatInput({
                 <input
                     ref={imageInputRef}
                     type="file"
+                    multiple
                     className="hidden"
                     onChange={(e) => handleFileSelection(e.target.files, 'image')}
                     accept="image/*"
                 />
 
                 {/* Text Input */}
-                <div className="flex-1 relative">
+                <div className="flex-1 relative min-w-0">
                     {/* Validation Message Above Input */}
                     {message.length > 0 && (
                         <div className={cn(
@@ -720,7 +571,7 @@ export function ChatInput({
                         onPaste={handlePaste}
                         placeholder={`${placeholder}`}
                         className={cn(
-                            "min-h-[40px] max-h-32 resize-none pr-12 leading-relaxed transition-all duration-200",
+                            "min-h-[40px] max-h-32 resize-none pr-12 leading-relaxed transition-all duration-200 w-full chat-textarea rounded-xl border-0 bg-transparent focus:ring-0 focus:border-0 shadow-none",
                             message.length === 100 && "border-red-300 bg-red-50/50 focus:border-red-400 focus:ring-red-400/20"
                         )}
                         disabled={disabled || isUploading}
@@ -742,8 +593,8 @@ export function ChatInput({
                 <Button
                     size="icon"
                     className={cn(
-                        "h-10 w-10 transition-all duration-200",
-                        canSend && "hover:scale-105"
+                        "h-10 w-10 transition-all duration-300 flex-shrink-0 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl hover:scale-110",
+                        canSend && "hover:scale-110"
                     )}
                     onClick={handleSendMessage}
                     disabled={!canSend || isUploading}

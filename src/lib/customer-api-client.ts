@@ -368,8 +368,6 @@ export const getGroupConversationId = async (groupId: string, groupName?: string
     if (response.data.success) {
         const conversations = response.data.data.filter(conv => conv.conversationType === "Group");
 
-
-
         if (conversations.length === 0) {
             return {
                 success: false,
@@ -378,11 +376,8 @@ export const getGroupConversationId = async (groupId: string, groupName?: string
             };
         }
 
-        // Create a simple mapping based on group creation order
-        // This is a temporary solution until we have proper groupId-conversationId mapping from backend
-        let conversation = null;
-
         // Try to match by groupName first
+        let conversation = null;
         if (groupName) {
             conversation = conversations.find(conv =>
                 conv.displayName === groupName ||
@@ -471,85 +466,31 @@ export const getGroups = async () => {
     }
 };
 
+
+
 export const createGroup = async (data: {
     groupName: string;
     description?: string;
-    groupType: "Private" | "Public" | "Community";
+    groupType: "Public" | "Private";
     groupAvatarUrl?: string;
 }) => {
     try {
-        // Build payload without undefined fields
-        const primaryPayload: Record<string, any> = {
-            groupName: data.groupName,
-            description: data.description ?? "",
-            groupType: data.groupType,
-        };
-        // Some backends require the key to exist even if empty
-        primaryPayload.groupAvatarUrl = data.groupAvatarUrl ?? "";
 
         const response = await customerApiClient.post<CustomerApiResponse<{
             groupId: string;
             groupName: string;
-            description: string;
-            groupType: string;
-            groupAvatarUrl: string;
-            memberCount: number;
+            defaultConversationId: number;
         }>>(
             "/groups",
-            primaryPayload,
             {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                groupName: data.groupName.trim(),
+                description: data.description?.trim() || "",
+                groupType: data.groupType,
+                groupAvatarUrl: data.groupAvatarUrl || ""
             }
         );
-
         return response.data;
     } catch (error: any) {
-        const status = error?.response?.status;
-        // If validation failed, try alternate field casing once
-        if (status === 400 || status === 422) {
-            // Retry 1: PascalCase as some .NET backends expect
-            try {
-                const pascalPayload: Record<string, any> = {
-                    GroupName: data.groupName,
-                    Description: data.description ?? "",
-                    GroupType: data.groupType,
-                };
-                if (data.groupAvatarUrl) pascalPayload.GroupAvatarUrl = data.groupAvatarUrl;
-
-                const retry1 = await customerApiClient.post<CustomerApiResponse<any>>(
-                    "/groups",
-                    pascalPayload,
-                    { headers: { 'Content-Type': 'application/json' } }
-                );
-                return retry1.data;
-            } catch (_) {
-                // Retry 2: alternative camel-case keys (name/type)
-                try {
-                    const altPayload: Record<string, any> = {
-                        name: data.groupName,
-                        description: data.description ?? "",
-                        type: data.groupType,
-                    };
-                    if (data.groupAvatarUrl) altPayload.avatarUrl = data.groupAvatarUrl;
-
-                    const retry2 = await customerApiClient.post<CustomerApiResponse<any>>(
-                        "/groups",
-                        altPayload,
-                        { headers: { 'Content-Type': 'application/json' } }
-                    );
-                    return retry2.data;
-                } catch (retryErr: any) {
-                    const resp = retryErr?.response;
-                    return {
-                        success: false,
-                        message: resp?.data?.errors?.[0]?.message || resp?.data?.message || "Không thể tạo nhóm (400)",
-                        data: null
-                    };
-                }
-            }
-        }
 
         const resp = error?.response;
         return {
@@ -1257,6 +1198,26 @@ export const sendConversationMessage = async (
         CustomerApiResponse<Message>
     >(`/conversations/${conversationId}/messages`, body);
     return response.data;
+};
+
+/**
+ * Mark a conversation as read
+ */
+export const markConversationAsRead = async (conversationId: number): Promise<CustomerApiResponse<void>> => {
+    try {
+        const response = await customerApiClient.post<CustomerApiResponse<void>>(
+            `/conversations/${conversationId}/mark-as-read`
+        );
+        console.log('[API] Mark conversation as read successful:', conversationId);
+        return response.data;
+    } catch (error: any) {
+        console.error('[API] Mark conversation as read failed:', error?.response?.status, error?.message);
+        return {
+            success: false,
+            message: error.response?.data?.message || error.message || 'Failed to mark conversation as read',
+            data: undefined
+        } as CustomerApiResponse<void>;
+    }
 };
 
 /**
