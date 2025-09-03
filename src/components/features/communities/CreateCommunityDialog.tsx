@@ -117,7 +117,8 @@ export function CreateCommunityDialog({ open, onOpenChange, onCommunityCreated }
                 onOpenChange(false);
             } else {
                 console.error("API returned error:", response);
-                toast.error(response.message || "Không thể tạo cộng đồng");
+                const msg = (response as any)?.message || (response as any)?.data?.message || "Không thể tạo cộng đồng";
+                toast.error(msg);
             }
 
         } catch (error: any) {
@@ -155,7 +156,7 @@ export function CreateCommunityDialog({ open, onOpenChange, onCommunityCreated }
             } else {
                 const errorResult = handleApiError(error, 'Error creating community');
                 console.error(errorResult.message);
-                toast.error("Không thể tạo cộng đồng. Vui lòng thử lại.");
+                toast.error(errorResult.message || "Không thể tạo cộng đồng. Vui lòng thử lại.");
             }
         } finally {
             setIsSubmitting(false);

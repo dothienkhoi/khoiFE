@@ -484,7 +484,8 @@ export const createGroup = async (data: {
             description: data.description ?? "",
             groupType: data.groupType,
         };
-        if (data.groupAvatarUrl) primaryPayload.groupAvatarUrl = data.groupAvatarUrl;
+        // Some backends require the key to exist even if empty
+        primaryPayload.groupAvatarUrl = data.groupAvatarUrl ?? "";
 
         const response = await customerApiClient.post<CustomerApiResponse<{
             groupId: string;
@@ -505,29 +506,48 @@ export const createGroup = async (data: {
 
         return response.data;
     } catch (error: any) {
+        const status = error?.response?.status;
         // If validation failed, try alternate field casing once
-        if (error?.response?.status === 400) {
+        if (status === 400 || status === 422) {
+            // Retry 1: PascalCase as some .NET backends expect
             try {
-                const altPayload: Record<string, any> = {
-                    name: data.groupName,
-                    description: data.description ?? "",
-                    type: data.groupType,
+                const pascalPayload: Record<string, any> = {
+                    GroupName: data.groupName,
+                    Description: data.description ?? "",
+                    GroupType: data.groupType,
                 };
-                if (data.groupAvatarUrl) altPayload.avatarUrl = data.groupAvatarUrl;
+                if (data.groupAvatarUrl) pascalPayload.GroupAvatarUrl = data.groupAvatarUrl;
 
-                const retry = await customerApiClient.post<CustomerApiResponse<any>>(
+                const retry1 = await customerApiClient.post<CustomerApiResponse<any>>(
                     "/groups",
-                    altPayload,
+                    pascalPayload,
                     { headers: { 'Content-Type': 'application/json' } }
                 );
-                return retry.data;
-            } catch (retryErr: any) {
-                const resp = retryErr?.response;
-                return {
-                    success: false,
-                    message: resp?.data?.errors?.[0]?.message || resp?.data?.message || "Không thể tạo nhóm (400)",
-                    data: null
-                };
+                return retry1.data;
+            } catch (_) {
+                // Retry 2: alternative camel-case keys (name/type)
+                try {
+                    const altPayload: Record<string, any> = {
+                        name: data.groupName,
+                        description: data.description ?? "",
+                        type: data.groupType,
+                    };
+                    if (data.groupAvatarUrl) altPayload.avatarUrl = data.groupAvatarUrl;
+
+                    const retry2 = await customerApiClient.post<CustomerApiResponse<any>>(
+                        "/groups",
+                        altPayload,
+                        { headers: { 'Content-Type': 'application/json' } }
+                    );
+                    return retry2.data;
+                } catch (retryErr: any) {
+                    const resp = retryErr?.response;
+                    return {
+                        success: false,
+                        message: resp?.data?.errors?.[0]?.message || resp?.data?.message || "Không thể tạo nhóm (400)",
+                        data: null
+                    };
+                }
             }
         }
 
@@ -1678,10 +1698,55 @@ export const addPostComment = async (
                 data: null
             };
         }
+        const status = error?.response?.status;
+        // Retry strategies for APIs that vary in routing/payload
+        if (status === 404 || status === 400 || status === 405) {
+            // Retry 1: PascalCase keys
+            try {
+                const pascalPayload: any = {
+                    Content: commentData.content,
+                };
+                if (typeof commentData.parentCommentId === 'number') pascalPayload.ParentCommentId = commentData.parentCommentId;
+                const retry1 = await customerApiClient.post(`/posts/${postId}/comments`, pascalPayload, { headers: { 'Content-Type': 'application/json' } });
+                return retry1.data;
+            } catch (_) {
+                // Retry 2: Alternate route with postId in body
+                try {
+                    const altPayload: any = {
+                        postId,
+                        content: commentData.content,
+                    };
+                    if (typeof commentData.parentCommentId === 'number') altPayload.parentCommentId = commentData.parentCommentId;
+                    const retry2 = await customerApiClient.post(`/posts/comments`, altPayload, { headers: { 'Content-Type': 'application/json' } });
+                    return retry2.data;
+                } catch (retryErr: any) {
+                    // Retry 3: x-www-form-urlencoded (some servers require this)
+                    try {
+                        const form = new URLSearchParams();
+                        form.append('content', commentData.content);
+                        if (typeof commentData.parentCommentId === 'number') form.append('parentCommentId', String(commentData.parentCommentId));
+                        const retry3 = await customerApiClient.post(`/posts/${postId}/comments`, form, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+                        return retry3.data;
+                    } catch (retryErr2: any) {
+                        console.error('Error adding post comment (after retries):', retryErr2);
+                        return {
+                            success: false,
+                            message: retryErr2?.response?.data?.message || retryErr?.response?.data?.message || error?.response?.data?.message || 'Không thể thêm bình luận',
+                            // @ts-ignore
+                            status: retryErr2?.response?.status || retryErr?.response?.status || status,
+                            data: null,
+                        };
+                    }
+                }
+            }
+        }
         console.error("Error adding post comment:", error);
         return {
             success: false,
             message: error.response?.data?.message || "Không thể thêm bình luận",
+            // propagate status to UI for graceful fallback
+            // @ts-ignore
+            status: status,
             data: null
         };
     }

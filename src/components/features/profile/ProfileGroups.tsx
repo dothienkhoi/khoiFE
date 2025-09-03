@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users } from "lucide-react";
 import { getMyGroups } from "@/lib/customer-api-client";
@@ -65,7 +66,12 @@ export function ProfileGroups() {
                     <div className="space-y-3">
                         {groups.map((g) => (
                             <div key={g.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50">
-                                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-[#ad46ff] to-[#1447e6]" />
+                                <Avatar className="h-10 w-10">
+                                    <AvatarImage src={g.avatarUrl || undefined} />
+                                    <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-semibold">
+                                        {g.name?.charAt(0).toUpperCase() || "G"}
+                                    </AvatarFallback>
+                                </Avatar>
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium truncate">{g.name}</p>
                                     <p className="text-xs text-muted-foreground truncate">{g.description || ""}</p>
