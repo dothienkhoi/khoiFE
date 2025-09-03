@@ -82,12 +82,6 @@ export function CreateCommunityDialog({ open, onOpenChange, onCommunityCreated }
             setAvatarFile(null);
             setAvatarPreview("");
 
-            // Đóng dialog
-            onOpenChange(false);
-
-        } catch (error: any) {
-            console.error("Error creating community:", error);
-            toast.error("Không thể tạo cộng đồng. Vui lòng thử lại.");
         } finally {
             setIsSubmitting(false);
         }

@@ -3,23 +3,35 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle
+} from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
     Image,
     FileText,
-    Link,
-    Smile,
     Send,
     Heart,
     MessageCircle,
-
     MoreHorizontal,
-    ThumbsUp,
-    Bookmark,
     RefreshCw,
     Loader2,
     X
@@ -81,11 +93,13 @@ interface CommunityPostsInterfaceProps {
 
 export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: CommunityPostsInterfaceProps) {
     const [posts, setPosts] = useState<Post[]>([]);
+    const [newPostTitle, setNewPostTitle] = useState("");
     const [newPostContent, setNewPostContent] = useState("");
     const [isCreatingPost, setIsCreatingPost] = useState(false);
     const [isLoadingPosts, setIsLoadingPosts] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([]);
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasMorePosts, setHasMorePosts] = useState(false);
@@ -96,8 +110,13 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     const [detailOpen, setDetailOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailPost, setDetailPost] = useState<any>(null);
+    const [detailCommentsTree, setDetailCommentsTree] = useState<any[]>([]);
     const [detailNewComment, setDetailNewComment] = useState("");
     const [replyTextMap, setReplyTextMap] = useState<Record<number, string>>({});
+    const [editingPost, setEditingPost] = useState<Post | null>(null);
+    const [editingTitle, setEditingTitle] = useState("");
+    const [editingContent, setEditingContent] = useState("");
+    const [deletingPost, setDeletingPost] = useState<Post | null>(null);
 
     const openPostDetail = async (post: Post) => {
         try {
@@ -107,6 +126,7 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
             const res = await getPostDetail(post.postId.toString());
             if (res.success && res.data) {
                 setDetailPost(res.data);
+                setDetailCommentsTree(buildCommentTree(res.data.comments || []));
             } else {
                 toast.error(res.message || "Không thể tải chi tiết bài viết");
             }
@@ -122,7 +142,10 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         try {
             setDetailLoading(true);
             const res = await getPostDetail((detailPost.postId || detailPost.id).toString());
-            if (res.success && res.data) setDetailPost(res.data);
+            if (res.success && res.data) {
+                setDetailPost(res.data);
+                setDetailCommentsTree(buildCommentTree(res.data.comments || []));
+            }
         } catch (e: any) {
             handleApiError(e, "Không thể làm mới chi tiết");
         } finally {
@@ -188,20 +211,22 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
 
     const handleCreatePost = async () => {
         try {
-            if (!newPostContent.trim()) return;
+            if (!newPostTitle.trim() || !newPostContent.trim()) return;
             setIsCreatingPost(true);
 
             const payload = {
-                title: `Bài viết mới trong ${groupName}`,
+                title: newPostTitle.trim(),
                 contentMarkdown: newPostContent.trim(),
-                attachmentFileIds: [] as string[]
+                attachmentFileIds: uploadedFileIds
             };
 
             const response = await createGroupPost(groupId, payload);
             if (response.success) {
                 toast.success("Đăng bài thành công!");
+                setNewPostTitle("");
                 setNewPostContent("");
                 setSelectedFiles([]);
+                setUploadedFileIds([]);
                 fetchPosts(1, true);
             } else {
                 toast.error(response.message || "Không thể đăng bài");
@@ -309,6 +334,25 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         return `${pad(d.getHours())}:${pad(d.getMinutes())} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
     };
 
+    const getInitials = (name?: string) => {
+        if (!name || typeof name !== "string") return "U";
+        const parts = name.trim().split(/\s+/);
+        const first = parts[0]?.[0] || "";
+        const last = parts.length > 1 ? parts[parts.length - 1]?.[0] || "" : "";
+        return (first + last).toUpperCase() || "U";
+    };
+
+    const toPlainText = (input?: string) => {
+        if (!input || typeof input !== "string") return "";
+        try {
+            const div = document.createElement("div");
+            div.innerHTML = input;
+            return (div.textContent || div.innerText || "").trim();
+        } catch {
+            return input.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        }
+    };
+
     const isValidHttpUrl = (value?: string) => {
         if (!value || typeof value !== "string") return false;
         try {
@@ -320,39 +364,93 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     };
 
     const buildCommentTree = (flat: any[] = []) => {
-        const byId: Record<string, any> = {};
-        flat.forEach((c: any) => {
-            const idKey = String(c.commentId);
-            byId[idKey] = { ...c, replies: [] };
+        if (!Array.isArray(flat)) return [] as any[];
+
+        const hasNested = flat.some((c: any) => Array.isArray(c.replies) && c.replies.length > 0);
+        const normalize = (c: any): any => ({
+            commentId: c.commentId ?? c.id,
+            content: c.content ?? c.Content ?? "",
+            author: c.author ?? c.Author ?? {},
+            createdAt: c.createdAt ?? c.CreatedAt ?? new Date().toISOString(),
+            parentCommentId: c.parentCommentId ?? c.ParentCommentId ?? null,
+            replies: Array.isArray(c.replies) ? c.replies.map(normalize) : []
         });
-        flat.forEach((c: any) => {
-            const parentId = c.parentCommentId;
-            if (parentId !== null && parentId !== undefined) {
-                const parentKey = String(parentId);
-                const childKey = String(c.commentId);
-                if (byId[parentKey] && byId[childKey]) {
-                    byId[parentKey].replies.push(byId[childKey]);
-                }
-            }
-        });
-        return Object.values(byId).filter((c: any) => c.parentCommentId === null || c.parentCommentId === undefined);
+
+        if (hasNested) {
+            return flat.map(normalize);
+        }
+
+        // Flat → tree
+        const items = flat.map(normalize);
+        const childrenByParent: Record<string, any[]> = {};
+        for (const c of items) {
+            const key = c.parentCommentId == null ? "root" : String(c.parentCommentId);
+            if (!childrenByParent[key]) childrenByParent[key] = [];
+            childrenByParent[key].push({ ...c, replies: [] });
+        }
+
+        const attach = (node: any): any => {
+            const children = childrenByParent[String(node.commentId)] || [];
+            node.replies = children.map(attach);
+            return node;
+        };
+        return (childrenByParent["root"] || []).map(attach);
+    };
+
+    const onEditPost = (post: Post) => {
+        setEditingPost(post);
+        setEditingTitle(post.title || "");
+        setEditingContent(post.contentMarkdown || post.content || "");
+    };
+
+    const saveEditPost = async () => {
+        if (!editingPost) return;
+        const updated = {
+            title: editingTitle.trim(),
+            content: editingContent.trim()
+        };
+        if (!updated.title || !updated.content) {
+            toast.error("Tiêu đề và nội dung không được để trống");
+            return;
+        }
+        // Optimistic update; TODO hook to Update API when available
+        setPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, title: updated.title, content: updated.content, contentMarkdown: updated.content } : p));
+        setEditingPost(null);
+        setEditingTitle("");
+        setEditingContent("");
+        toast.success("Cập nhật bài viết thành công");
+    };
+
+    const onDeletePost = async (post: Post) => {
+        setDeletingPost(post);
+    };
+
+    const confirmDeletePost = async () => {
+        if (!deletingPost) return;
+        const previous = posts;
+        setPosts(prev => prev.filter(p => p.id !== deletingPost.id));
+        setDeletingPost(null);
+        try {
+            // TODO: Kết nối API xóa bài viết khi backend sẵn sàng
+        } catch (e: any) {
+            // rollback nếu lỗi
+            setPosts(previous);
+            toast.error("Xóa bài viết thất bại");
+        }
     };
 
     const renderComments = (nodes: any[] = [], level: number = 0) => (
-        <div className={level > 0 ? "ml-8 space-y-3" : "space-y-3"}>
+        <div className={level > 0 ? "ml-6 space-y-2" : "space-y-3"}>
             {nodes.map((c: any) => (
                 <div key={c.commentId} className="flex items-start space-x-3">
-                    <Avatar className="h-8 w-8">
-                        <AvatarImage src={c.author?.avatarUrl} />
-                        <AvatarFallback className="bg-blue-600 text-white">{(c.author?.fullName || "U").charAt(0)}</AvatarFallback>
-                    </Avatar>
+
                     <div className="flex-1">
                         <div className="text-sm font-medium">{c.author?.fullName}</div>
                         <div className="text-sm text-gray-500">{formatDateAbsolute(c.createdAt)}</div>
                         <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{c.content}</div>
-                        <div className="flex items-center space-x-2 mt-2">
-                            <Input value={replyTextMap[c.commentId] || ""} onChange={(e) => setReplyTextMap(prev => ({ ...prev, [c.commentId]: e.target.value }))} placeholder="Trả lời bình luận..." className="h-8" />
-                            <Button size="sm" onClick={async () => {
+                        <div className="flex items-center space-x-2 mt-1">
+                            <Input value={replyTextMap[c.commentId] || ""} onChange={(e) => setReplyTextMap(prev => ({ ...prev, [c.commentId]: e.target.value }))} placeholder="Trả lời bình luận..." className="h-7 text-xs px-2" />
+                            <Button size="sm" className="h-7 px-3 text-xs" onClick={async () => {
                                 const content = (replyTextMap[c.commentId] || '').trim();
                                 if (!content) return;
                                 try {
@@ -374,9 +472,19 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                                     const res = await addPostComment((detailPost.postId || detailPost.id).toString(), { content, parentCommentId: c.commentId });
                                     if (res.success) {
                                         const detail = await getPostDetail((detailPost.postId || detailPost.id).toString());
-                                        if (detail.success) setDetailPost(detail.data);
+                                        if (detail.success) {
+                                            // Merge optimistic comments (temporary ids) to avoid flicker if backend delays indexing
+                                            setDetailPost((prev: any) => {
+                                                const serverComments = detail.data?.comments || [];
+                                                const prevComments = prev?.comments || [];
+                                                const tempOnly = prevComments.filter((pc: any) => !serverComments.some((sc: any) => sc.commentId === pc.commentId));
+                                                return { ...detail.data, comments: [...serverComments, ...tempOnly] };
+                                            });
+                                            setDetailCommentsTree(buildCommentTree(detail.data.comments || []));
+                                        }
                                         setReplyTextMap(prev => ({ ...prev, [c.commentId]: "" }));
                                     } else {
+                                        // Graceful fallback for 404 (post not found or comment route mismatch)
                                         toast.error(res.message || 'Không thể trả lời');
                                     }
                                 } catch (err: any) {
@@ -411,26 +519,95 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                 </div>
 
                 {/* Create Post */}
-                <Card className="border-2 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl">
-                    <CardContent className="p-6">
-                        <div className="flex items-start space-x-4">
-                            <Avatar className="h-12 w-12 ring-2 ring-blue-100 dark:ring-blue-900 shadow-md">
-                                <AvatarImage src="/api/placeholder/48/48" />
-                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold text-lg">B</AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 space-y-4">
-                                <div className="relative">
-                                    <Textarea placeholder={`Chia sẻ điều gì đó với cộng đồng ${groupName}...`} value={newPostContent} onChange={(e) => setNewPostContent(e.target.value)} className="min-h-[120px] resize-none border-2 border-gray-200 dark:border-gray-600 rounded-xl p-4 text-base focus:border-blue-500 dark:focus:border-blue-400 transition-colors" disabled={isCreatingPost} />
+                <Card className="border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-blue-500 transition-all duration-200 shadow-sm hover:shadow-md bg-white dark:bg-gray-900">
+                    <CardContent className="p-4">
+                        <div className="space-y-3">
+                            <Input placeholder="Tiêu đề bài viết" value={newPostTitle} onChange={(e) => setNewPostTitle(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-base focus:border-gray-400 dark:focus:border-blue-400 focus:ring-2 focus:ring-gray-100 dark:focus:ring-blue-900/20 transition-all duration-200 text-black dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400" disabled={isCreatingPost} />
+
+                            {/* File Attachment Controls - Above Tiptap */}
+                            <div className="flex items-center space-x-1 p-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-600 w-fit">
+                                <input
+                                    type="file"
+                                    id="file-upload"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const files = Array.from(e.target.files || []);
+                                        setSelectedFiles(prev => [...prev, ...files]);
+                                    }}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('file-upload')?.click()}
+                                    className="h-7 px-2 hover:bg-gray-100 dark:hover:bg-blue-900/20 text-black dark:text-blue-300 transition-colors duration-200"
+                                >
+                                    <FileText className="h-3 w-3 mr-1" />
+                                    <span className="text-xs font-medium">Tài liệu</span>
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => document.getElementById('file-upload')?.click()}
+                                    className="h-7 px-2 hover:bg-gray-100 dark:hover:bg-blue-900/20 text-black dark:text-blue-300 transition-colors duration-200"
+                                >
+                                    <Image className="h-3 w-3 mr-1" />
+                                    <span className="text-xs font-medium">Hình ảnh</span>
+                                </Button>
+                            </div>
+
+                            <RichTextEditor
+                                content={newPostContent}
+                                onChange={setNewPostContent}
+                                placeholder={`Nội dung chia sẻ với cộng đồng ${groupName}...`}
+                                disabled={isCreatingPost}
+                            />
+                            {/* File Preview */}
+                            {selectedFiles.length > 0 && (
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                    {selectedFiles.map((file, index) => (
+                                        <div key={index} className="relative group">
+                                            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors duration-200">
+                                                <div className="flex items-center space-x-2">
+                                                    <FileText className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                                                    <span className="text-xs text-black dark:text-gray-300 truncate font-medium">{file.name}</span>
+                                                </div>
+                                                <div className="text-xs text-black dark:text-gray-400 mt-1">{formatFileSize(file.size)}</div>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+                                                    setUploadedFileIds(prev => prev.filter((_, i) => i !== index));
+                                                }}
+                                                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-sm"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="flex items-center justify-between pt-2">
-                                    <div className="flex items-center space-x-2">
-                                        <Button type="button" variant="ghost" size="icon"><Image className="h-5 w-5" /></Button>
-                                        <Button type="button" variant="ghost" size="icon"><FileText className="h-5 w-5" /></Button>
-                                        <Button type="button" variant="ghost" size="icon"><Link className="h-5 w-5" /></Button>
-                                        <Button type="button" variant="ghost" size="icon"><Smile className="h-5 w-5" /></Button>
-                                    </div>
-                                    <Button onClick={handleCreatePost} disabled={isCreatingPost || !newPostContent.trim()} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                                        <Send className="h-4 w-4 mr-2" /> Đăng bài
+                            )}
+
+                            <div className="flex items-center justify-between pt-2">
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-xs text-black dark:text-gray-500">
+                                        {newPostTitle.length}/100 • {newPostContent.length}/2000
+                                    </span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Button
+                                        onClick={handleCreatePost}
+                                        disabled={isCreatingPost || !newPostContent.trim() || !newPostTitle.trim() || newPostTitle.length > 100 || newPostContent.length > 2000}
+                                        className="bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 dark:from-blue-600 dark:to-purple-600 dark:hover:from-blue-700 dark:hover:to-purple-700 text-white shadow-sm hover:shadow-md transition-all duration-200 px-6 py-2 rounded-lg font-medium"
+                                    >
+                                        {isCreatingPost ? (
+                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        ) : (
+                                            <Send className="h-4 w-4 mr-2" />
+                                        )}
+                                        Đăng bài
                                     </Button>
                                 </div>
                             </div>
@@ -460,44 +637,82 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                     )}
 
                     {posts.map((post) => (
-                        <Card key={post.id} className="border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                        <Card key={post.id} className="bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md dark:shadow-lg dark:hover:shadow-xl transition-all duration-200 backdrop-blur-sm">
                             <CardContent className="p-6">
+                                {/* Author Info */}
                                 <div className="flex items-start space-x-3 mb-4">
                                     <Avatar className="h-10 w-10">
-                                        <AvatarImage src={isValidHttpUrl(post.author.avatarUrl) ? post.author.avatarUrl : undefined} />
-                                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{(post.author.fullName || post.author.displayName || post.author.name || "U").charAt(0)}</AvatarFallback>
+                                        <AvatarImage src={isValidHttpUrl(post.author.avatarUrl) ? post.author.avatarUrl : undefined} alt={post.author.fullName || post.author.displayName || "User"} />
+                                        <AvatarFallback>{getInitials(post.author.fullName || post.author.displayName || post.author.name)}</AvatarFallback>
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center space-x-2">
-                                            <h3 className="font-semibold text-gray-900 dark:text-white">{post.author.fullName || post.author.displayName || post.author.name || "Unknown User"}</h3>
-                                            <span className="text-sm text-gray-500 dark:text-gray-400">
-                                                {formatDateAbsolute(post.createdAt)}
-                                            </span>
+                                        <div className="flex items-center space-x-2 mb-1">
+                                            <h3 className="font-bold text-black dark:text-white text-lg">{post.author.fullName || post.author.displayName || post.author.name || "Unknown User"}</h3>
+                                            <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-600/20 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-500/30 text-xs px-2 py-1">
+                                                Member
+                                            </Badge>
                                         </div>
-                                        <h4 className="text-lg font-medium text-gray-900 dark:text-white mt-1">{post.title}</h4>
+                                        <div className="flex items-center space-x-2 text-sm text-black dark:text-gray-400">
+                                            <span>{groupName}</span>
+                                            <span>•</span>
+                                            <span>{formatDateAbsolute(post.createdAt)}</span>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="mb-4">
-                                    <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{post.content || post.contentMarkdown || (post as any).contentSnippet || ""}</p>
-                                </div>
-                                <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
-                                    <div className="flex items-center space-x-6">
-                                        <button onClick={() => handleToggleLike(post)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                                            <Heart className={`h-5 w-5 ${post.isLiked ? "fill-current" : ""}`} />
-                                            <span className="text-sm font-medium">{post.likeCount}</span>
-                                        </button>
-                                        <button onClick={() => toggleComments(post)} className="flex items-center space-x-2 px-3 py-2 rounded-lg text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-                                            <MessageCircle className="h-5 w-5" />
-                                            <span className="text-sm font-medium">{post.commentCount}</span>
-                                        </button>
-                                        {/* Nút Chi tiết đã được chuyển sang biểu tượng bình luận */}
-                                    </div>
-                                    <button className={`p-2 rounded-lg transition-colors ${post.isBookmarked ? "text-blue-500 bg-blue-50 dark:bg-blue-900/20" : "text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"}`}>
-                                        <Bookmark className={`h-5 w-5 ${post.isBookmarked ? "fill-current" : ""}`} />
-                                    </button>
                                 </div>
 
-                                {/* Bình luận inline đã được chuyển vào dialog chi tiết */}
+                                {/* Post Content */}
+                                <div className="mb-6">
+                                    <h4 className="text-xl font-bold text-black dark:text-white mb-3">{post.title}</h4>
+                                    <p className="text-black dark:text-gray-300 text-base leading-relaxed whitespace-pre-wrap">
+                                        {toPlainText(post.content || post.contentMarkdown || (post as any).contentSnippet || "")}
+                                    </p>
+                                </div>
+
+                                {/* Interaction Bar */}
+                                <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <div className="flex items-center space-x-6">
+                                        <button
+                                            onClick={() => handleToggleLike(post)}
+                                            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-black dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-200"
+                                        >
+                                            <Heart className={`h-5 w-5 ${post.isLiked ? "fill-current text-red-500" : ""}`} />
+                                            <span className="text-sm font-medium">Thích</span>
+                                            {post.likeCount > 0 && (
+                                                <span className="text-sm text-gray-600 dark:text-gray-400">({post.likeCount})</span>
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={() => toggleComments(post)}
+                                            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-black dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all duration-200"
+                                        >
+                                            <MessageCircle className="h-5 w-5" />
+                                            <span className="text-sm font-medium">Bình luận</span>
+                                            {post.commentCount > 0 && (
+                                                <span className="text-sm text-gray-600 dark:text-gray-400">({post.commentCount})</span>
+                                            )}
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Badge variant="outline" className="bg-blue-100 dark:bg-blue-600/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 text-xs px-3 py-1">
+                                            Bài của bạn
+                                        </Badge>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button className="p-2 rounded-lg text-black dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-44 bg-white dark:bg-gray-800 text-black dark:text-gray-100 border border-gray-200 dark:border-gray-700">
+                                                <DropdownMenuItem onClick={() => onEditPost(post)} className="focus:bg-gray-100 dark:focus:bg-gray-700">
+                                                    Chỉnh sửa bài viết
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => onDeletePost(post)} className="text-red-600 focus:bg-red-50 dark:focus:bg-red-900/30">
+                                                    Xóa bài viết
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
                     ))}
@@ -519,21 +734,19 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                 </div>
             </div>
             <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
-                        <div className="flex items-center justify-between">
-                            <DialogTitle>Chi tiết bài viết</DialogTitle>
-                            <Button size="sm" variant="outline" onClick={refreshPostDetail} disabled={detailLoading}>Làm mới</Button>
-                        </div>
+                        <DialogTitle>Chi tiết bài viết</DialogTitle>
+                        <DialogDescription className="sr-only">Cửa sổ hiển thị nội dung bài viết và các bình luận.</DialogDescription>
                     </DialogHeader>
                     {detailLoading ? (
                         <div className="flex items-center text-gray-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Đang tải...</div>
                     ) : detailPost ? (
                         <div className="space-y-4">
                             <div className="flex items-start space-x-3">
-                                <Avatar className="h-10 w-10">
-                                    <AvatarImage src={isValidHttpUrl(detailPost.author?.avatarUrl) ? detailPost.author?.avatarUrl : undefined} />
-                                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">{(detailPost.author?.fullName || "U").charAt(0)}</AvatarFallback>
+                                <Avatar className="h-9 w-9">
+                                    <AvatarImage src={isValidHttpUrl(detailPost.author?.avatarUrl) ? detailPost.author?.avatarUrl : undefined} alt={detailPost.author?.fullName || "User"} />
+                                    <AvatarFallback>{getInitials(detailPost.author?.fullName)}</AvatarFallback>
                                 </Avatar>
                                 <div className="flex-1">
                                     <div className="font-semibold">{detailPost.author?.fullName}</div>
@@ -542,7 +755,7 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                             </div>
                             <div>
                                 <div className="text-lg font-medium mb-2">{detailPost.title}</div>
-                                <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{detailPost.contentMarkdown || detailPost.content || ""}</div>
+                                <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{toPlainText(detailPost.contentMarkdown || detailPost.content || "")}</div>
                             </div>
                             <div className="flex items-center space-x-6 pt-2">
                                 <button onClick={async () => {
@@ -557,22 +770,26 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                                     } catch (e: any) {
                                         handleApiError(e, "Không thể thích/bỏ thích");
                                     }
-                                }} className="flex items-center space-x-2 text-gray-600">
+                                }} className="flex items-center space-x-2 text-gray-600 hover:text-red-500 transition-colors">
                                     <Heart className={`h-5 w-5 ${detailPost.isLiked ? 'fill-current text-red-500' : ''}`} />
-                                    <span className="text-sm">{detailPost.likeCount || 0}</span>
+                                    <span className="text-sm font-medium">Thích</span>
+                                    <span className="text-sm text-gray-500">({detailPost.likeCount || 0})</span>
                                 </button>
                                 <div className="flex items-center space-x-2 text-gray-600">
                                     <MessageCircle className="h-5 w-5" />
-                                    <span className="text-sm">{detailPost.commentCount || (detailPost.comments?.length || 0)}</span>
+                                    <span className="text-sm font-medium">Bình luận</span>
+                                    <span className="text-sm text-gray-500">({detailPost.commentCount || (detailPost.comments?.length || 0)})</span>
                                 </div>
                             </div>
                             <div className="space-y-3">
                                 <div className="font-semibold">Bình luận</div>
-                                {(detailPost.comments || []).length === 0 ? (
-                                    <div className="text-sm text-gray-500">Chưa có bình luận nào</div>
-                                ) : (
-                                    renderComments(buildCommentTree(detailPost.comments))
-                                )}
+                                {(() => {
+                                    const tree = buildCommentTree(detailPost.comments || []); return tree.length === 0 ? (
+                                        <div className="text-sm text-gray-500">Chưa có bình luận nào</div>
+                                    ) : (
+                                        renderComments(tree)
+                                    );
+                                })()}
                                 <div className="flex items-center space-x-2">
                                     <Input value={detailNewComment} onChange={(e) => setDetailNewComment(e.target.value)} placeholder="Viết bình luận..." className="flex-1" />
                                     <Button size="sm" onClick={async () => {
@@ -614,6 +831,47 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                     )}
                 </DialogContent>
             </Dialog>
+            {/* Edit Post Dialog */}
+            <Dialog open={!!editingPost} onOpenChange={(open) => { if (!open) setEditingPost(null); }}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Chỉnh sửa bài viết</DialogTitle>
+                        <DialogDescription className="sr-only">Biểu mẫu chỉnh sửa tiêu đề và nội dung bài viết.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        <Input
+                            placeholder="Tiêu đề bài viết"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            className="border border-gray-300 dark:border-gray-600 rounded-lg p-3 text-base focus:border-gray-400 dark:focus:border-blue-400 focus:ring-2 focus:ring-gray-100 dark:focus:ring-blue-900/20 transition-all duration-200 text-black dark:text-white"
+                        />
+                        <RichTextEditor
+                            content={editingContent}
+                            onChange={setEditingContent}
+                            placeholder="Nội dung bài viết..."
+                        />
+                        <div className="flex justify-end space-x-2 pt-2">
+                            <Button variant="outline" onClick={() => setEditingPost(null)}>Hủy</Button>
+                            <Button onClick={saveEditPost} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">Lưu thay đổi</Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+            {/* Confirm Delete Dialog */}
+            <AlertDialog open={!!deletingPost} onOpenChange={(open) => { if (!open) setDeletingPost(null); }}>
+                <AlertDialogContent className="max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Bạn có chắc muốn xóa bài viết này?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Hành động này không thể hoàn tác. Bài viết sẽ bị xóa khỏi cộng đồng.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDeletePost} className="bg-red-600 hover:bg-red-700 text-white">Xóa bài viết</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

@@ -475,6 +475,7 @@ export const createGroup = async (data: {
     groupAvatarUrl?: string;
 }) => {
     try {
+
         const response = await customerApiClient.post<CustomerApiResponse<{
             groupId: string;
             groupName: string;
@@ -490,6 +491,7 @@ export const createGroup = async (data: {
         );
         return response.data;
     } catch (error: any) {
+
         const resp = error?.response;
         return {
             success: false,
@@ -1657,10 +1659,55 @@ export const addPostComment = async (
                 data: null
             };
         }
+        const status = error?.response?.status;
+        // Retry strategies for APIs that vary in routing/payload
+        if (status === 404 || status === 400 || status === 405) {
+            // Retry 1: PascalCase keys
+            try {
+                const pascalPayload: any = {
+                    Content: commentData.content,
+                };
+                if (typeof commentData.parentCommentId === 'number') pascalPayload.ParentCommentId = commentData.parentCommentId;
+                const retry1 = await customerApiClient.post(`/posts/${postId}/comments`, pascalPayload, { headers: { 'Content-Type': 'application/json' } });
+                return retry1.data;
+            } catch (_) {
+                // Retry 2: Alternate route with postId in body
+                try {
+                    const altPayload: any = {
+                        postId,
+                        content: commentData.content,
+                    };
+                    if (typeof commentData.parentCommentId === 'number') altPayload.parentCommentId = commentData.parentCommentId;
+                    const retry2 = await customerApiClient.post(`/posts/comments`, altPayload, { headers: { 'Content-Type': 'application/json' } });
+                    return retry2.data;
+                } catch (retryErr: any) {
+                    // Retry 3: x-www-form-urlencoded (some servers require this)
+                    try {
+                        const form = new URLSearchParams();
+                        form.append('content', commentData.content);
+                        if (typeof commentData.parentCommentId === 'number') form.append('parentCommentId', String(commentData.parentCommentId));
+                        const retry3 = await customerApiClient.post(`/posts/${postId}/comments`, form, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+                        return retry3.data;
+                    } catch (retryErr2: any) {
+                        console.error('Error adding post comment (after retries):', retryErr2);
+                        return {
+                            success: false,
+                            message: retryErr2?.response?.data?.message || retryErr?.response?.data?.message || error?.response?.data?.message || 'Không thể thêm bình luận',
+                            // @ts-ignore
+                            status: retryErr2?.response?.status || retryErr?.response?.status || status,
+                            data: null,
+                        };
+                    }
+                }
+            }
+        }
         console.error("Error adding post comment:", error);
         return {
             success: false,
             message: error.response?.data?.message || "Không thể thêm bình luận",
+            // propagate status to UI for graceful fallback
+            // @ts-ignore
+            status: status,
             data: null
         };
     }
