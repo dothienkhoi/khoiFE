@@ -1199,6 +1199,26 @@ export const sendConversationMessage = async (
 };
 
 /**
+ * Mark a conversation as read
+ */
+export const markConversationAsRead = async (conversationId: number): Promise<CustomerApiResponse<void>> => {
+    try {
+        const response = await customerApiClient.post<CustomerApiResponse<void>>(
+            `/conversations/${conversationId}/mark-as-read`
+        );
+        console.log('[API] Mark conversation as read successful:', conversationId);
+        return response.data;
+    } catch (error: any) {
+        console.error('[API] Mark conversation as read failed:', error?.response?.status, error?.message);
+        return {
+            success: false,
+            message: error.response?.data?.message || error.message || 'Failed to mark conversation as read',
+            data: undefined
+        } as CustomerApiResponse<void>;
+    }
+};
+
+/**
  * Send a new message in a group conversation
  * Note: Backend expects conversationId as integer, not GUID
  */

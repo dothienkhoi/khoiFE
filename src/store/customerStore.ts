@@ -66,6 +66,7 @@ interface CustomerState {
     addConversation: (conversation: Conversation) => void;
     updateConversation: (conversationId: number, updates: Partial<Conversation>) => void;
     removeConversation: (conversationId: number) => void;
+    markConversationAsRead: (conversationId: number) => Promise<void>;
 
     // Messages
     setMessages: (conversationId: number, messages: Message[]) => void;
@@ -192,6 +193,29 @@ export const useCustomerStore = create<CustomerState>()(
             removeConversation: (conversationId) => set((state) => ({
                 conversations: state.conversations.filter(conversation => conversation.conversationId !== conversationId)
             })),
+            markConversationAsRead: async (conversationId) => {
+                try {
+                    // Import API function to avoid circular dependency
+                    const { markConversationAsRead: markAsReadApi } = await import('@/lib/customer-api-client');
+
+                    const response = await markAsReadApi(conversationId);
+
+                    if (response.success) {
+                        // Update local state only if API call succeeds
+                        set((state) => ({
+                            conversations: state.conversations.map(conversation =>
+                                conversation.conversationId === conversationId
+                                    ? { ...conversation, unreadCount: 0 }
+                                    : conversation
+                            )
+                        }));
+                    } else {
+                        console.error('Failed to mark conversation as read:', response.message);
+                    }
+                } catch (error) {
+                    console.error('Error marking conversation as read:', error);
+                }
+            },
 
             // Messages actions
             setMessages: (conversationId, messages) => set((state) => ({

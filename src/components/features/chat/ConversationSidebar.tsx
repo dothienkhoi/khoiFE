@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
     Search,
     Plus,
@@ -24,7 +23,8 @@ export function ConversationSidebar() {
         activeChatId,
         activeChatType,
         setActiveChat,
-        refreshConversations
+        refreshConversations,
+        markConversationAsRead
     } = useCustomerStore();
 
     // Load conversations on mount
@@ -56,8 +56,13 @@ export function ConversationSidebar() {
         (conversation.displayName || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleConversationClick = (conversation: Conversation) => {
+    const handleConversationClick = async (conversation: Conversation) => {
         setActiveChat(conversation.conversationId.toString(), 'direct');
+
+        // Mark conversation as read if it has unread messages
+        if (conversation.unreadCount > 0) {
+            await markConversationAsRead(conversation.conversationId);
+        }
     };
 
     const formatLastSeen = (lastSeen?: string) => {
@@ -153,9 +158,7 @@ export function ConversationSidebar() {
                                     </p>
                                     <div className="flex items-center gap-1">
                                         {conversation.unreadCount > 0 && (
-                                            <Badge variant="secondary" className="bg-[#ad46ff] text-white text-xs">
-                                                {conversation.unreadCount}
-                                            </Badge>
+                                            <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0" />
                                         )}
                                     </div>
                                 </div>
