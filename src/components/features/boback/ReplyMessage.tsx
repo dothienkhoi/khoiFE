@@ -1,22 +1,63 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Message } from "@/types/customer.types";
+import { ParentMessage } from "@/types/customer.types";
+import { FileText, Image } from "lucide-react";
 
 interface ReplyMessageProps {
-    parentMessage: Message;
+    parentMessage: ParentMessage;
     isOwnMessage?: boolean;
     className?: string;
     onScrollToMessage?: (messageId: string) => void;
+    parentMessageId?: string | null; // Thêm prop này để truyền trực tiếp
 }
 
-export function ReplyMessage({ parentMessage, isOwnMessage = false, className, onScrollToMessage }: ReplyMessageProps) {
-    if (!parentMessage || !parentMessage.sender) return null;
+export function ReplyMessage({ parentMessage, isOwnMessage = false, className, onScrollToMessage, parentMessageId }: ReplyMessageProps) {
+    if (!parentMessage) return null;
 
     const handleClick = () => {
-        if (onScrollToMessage && parentMessage.id) {
-            onScrollToMessage(parentMessage.id);
+        const targetMessageId = parentMessageId || parentMessage.parentMessageId;
+
+        if (onScrollToMessage && targetMessageId) {
+            onScrollToMessage(targetMessageId);
         }
+    };
+
+    const renderContent = () => {
+        // Kiểm tra loại tin nhắn để hiển thị phù hợp
+        if (parentMessage.messageType === 'Image') {
+            return (
+                <div className="flex items-center gap-2">
+                    <Image className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground text-xs">Hình ảnh</span>
+                </div>
+            );
+        }
+
+        if (parentMessage.messageType === 'File') {
+            return (
+                <div className="flex items-center gap-2">
+                    <FileText className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground text-xs">Tệp tin</span>
+                </div>
+            );
+        }
+
+        // Tin nhắn văn bản
+        if (parentMessage.contentSnippet) {
+            return (
+                <p className="text-muted-foreground text-xs font-medium leading-relaxed">
+                    {parentMessage.contentSnippet}
+                </p>
+            );
+        }
+
+        // Tin nhắn không có nội dung
+        return (
+            <p className="text-muted-foreground text-xs font-medium italic">
+                Tin nhắn không có nội dung
+            </p>
+        );
     };
 
     return (
@@ -25,7 +66,7 @@ export function ReplyMessage({ parentMessage, isOwnMessage = false, className, o
             <div className="flex items-center gap-2 mb-2 pb-2 border-b border-primary/20">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                 <span className="text-primary font-semibold text-xs">
-                    Trả lời {parentMessage.sender.displayName || 'Người dùng'}
+                    Trả lời {parentMessage.senderName || 'Người dùng'}
                 </span>
             </div>
 
@@ -35,24 +76,7 @@ export function ReplyMessage({ parentMessage, isOwnMessage = false, className, o
                 onClick={handleClick}
                 title="Nhấp để xem tin nhắn gốc"
             >
-                {parentMessage.content ? (
-                    <p className="text-muted-foreground text-xs font-medium leading-relaxed">
-                        {parentMessage.content}
-                    </p>
-                ) : parentMessage.attachments && parentMessage.attachments.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-muted rounded flex items-center justify-center">
-                            <span className="text-[8px] text-muted-foreground">📎</span>
-                        </div>
-                        <span className="text-muted-foreground text-xs">
-                            {parentMessage.attachments.length} tệp đính kèm
-                        </span>
-                    </div>
-                ) : (
-                    <p className="text-muted-foreground text-xs font-medium italic">
-                        Tin nhắn không có nội dung
-                    </p>
-                )}
+                {renderContent()}
             </div>
         </div>
     );

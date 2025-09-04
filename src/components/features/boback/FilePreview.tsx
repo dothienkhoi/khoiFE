@@ -74,8 +74,13 @@ export function FilePreview({
         <>
             {/* Simple Progress Bar - Background of Message Input */}
             {isUploading && (
-                <div className="fixed bottom-32 left-4 right-4 z-50">
-                    <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div className="fixed bottom-23 left-[415px] z-43">
+                    <div
+                        className="h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden transition-all duration-300"
+                        style={{
+                            width: `${Math.max(256, files.length * 64 + 48)}px` // 64px per file + 48px padding
+                        }}
+                    >
                         <div
                             className="h-full bg-gradient-to-r from-[#ad46ff] to-[#1447e6] rounded-full transition-all duration-500 ease-out relative"
                             style={{ width: '75%' }}
@@ -88,7 +93,7 @@ export function FilePreview({
 
             {/* Corner File Preview with Background Container */}
             {!hideWhenPopupOpen && (
-                <div className="fixed bottom-32 left-4 z-40">
+                <div className="fixed bottom-25 left-[415px] z-40">
                     <div className="bg-white/95 dark:bg-gray-900/95 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl p-3 backdrop-blur-md">
                         <div className="flex items-center gap-3">
                             {/* Visible Files */}

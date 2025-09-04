@@ -30,7 +30,7 @@ export function AttachmentPopup({
     const isAtLimit = selectedFilesCount >= maxFiles;
 
     return (
-        <div className="absolute bottom-full left-0 mb-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 min-w-[320px] animate-in">
+        <div className="absolute bottom-full left-0 mb-8 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 min-w-[320px] animate-in">
             {/* Header */}
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
                 <div className="flex items-center gap-2">

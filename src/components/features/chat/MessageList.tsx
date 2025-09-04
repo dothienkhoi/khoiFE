@@ -7,12 +7,14 @@ import { Message } from "@/types/customer.types";
 import { useCustomerStore } from "@/store/customerStore";
 import { getMessageHistory } from "@/lib/customer-api-client";
 import { useAuthStore } from "@/store/authStore";
-import { formatDistanceToNow } from "date-fns";
-import { vi } from "date-fns/locale";
+import { useChatHub } from "@/components/providers/ChatHubProvider";
+
 import { cn } from "@/lib/utils";
+import { formatMessageTime } from "@/lib/dateUtils";
 import {
     Image as ImageIcon,
-    File
+    File,
+    MessageCircle
 } from "lucide-react";
 import { PollMessage } from "./PollMessage";
 import { ImageGallery } from "./ImageGallery";
@@ -25,10 +27,13 @@ interface MessageListProps {
     partnerName: string;
     partnerAvatar?: string;
     onReplyToMessage?: (message: Message) => void;
+    chatType?: 'direct' | 'group';
 }
 
-export function MessageList({ conversationId, partnerName, partnerAvatar, onReplyToMessage }: MessageListProps) {
+export function MessageList({ conversationId, partnerName, partnerAvatar, onReplyToMessage, chatType = 'direct' }: MessageListProps) {
     const { messages, setMessages } = useCustomerStore();
+    const { user: currentUser } = useAuthStore();
+    const { joinConversation, leaveConversation, markMessagesAsRead } = useChatHub();
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -49,7 +54,35 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
         }
     }, [conversationMessages.length]);
 
-    // Poll for new messages as fallback when SignalR fails
+
+    useEffect(() => {
+        if (conversationId) {
+            joinConversation(conversationId);
+        }
+
+        return () => {
+            if (conversationId) {
+                leaveConversation(conversationId);
+            }
+        };
+    }, [conversationId, joinConversation, leaveConversation]);
+
+
+    useEffect(() => {
+        if (conversationId && conversationMessages.length > 0) {
+
+            const otherUserMessages = conversationMessages.filter(msg =>
+                msg.sender.userId !== currentUser?.id
+            );
+
+            if (otherUserMessages.length > 0) {
+                const messageIds = otherUserMessages.map(msg => msg.id);
+                markMessagesAsRead(conversationId, messageIds);
+            }
+        }
+    }, [conversationId, conversationMessages, currentUser?.id, markMessagesAsRead]);
+
+
     useEffect(() => {
         if (!conversationId) return;
 
@@ -112,11 +145,17 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
             // Highlight message
             setHighlightedMessageId(messageId);
 
-            // Remove highlight after 3 seconds
+            // Remove highlight after 1 second
             setTimeout(() => {
                 setHighlightedMessageId(null);
-            }, 3000);
+            }, 1000);
         }
+    }, []);
+
+    // Handle toggle reaction
+    const handleToggleReaction = useCallback((message: Message, reactionCode: string) => {
+        // TODO: Implement reaction toggle API call
+        // console.log('Toggle reaction:', { messageId: message.id, reactionCode });
     }, []);
 
     const loadMessages = async (beforeMessageId?: string) => {
@@ -181,12 +220,7 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
         }
     }, [hasMore, isLoadingMore, loadMoreMessages, conversationMessages.length]);
 
-    const formatMessageTime = useCallback((timestamp: string) => {
-        return formatDistanceToNow(new Date(timestamp), {
-            addSuffix: true,
-            locale: vi
-        });
-    }, []);
+
 
     const isOwnMessage = useCallback((message: Message) => {
         const currentUser = useAuthStore.getState().user;
@@ -290,30 +324,16 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                 </div>
                             );
                         })}
-
-                        {/* Fallback: show content as a link if looks like URL */}
-                        {(!message.attachments || message.attachments.length === 0) && message.content && (
-                            <div className="bg-background/20 rounded p-2">
-                                <a className="text-xs underline" href={message.content} target="_blank" rel="noreferrer">
-                                    {message.content}
-                                </a>
-                            </div>
-                        )}
                     </div>
-                );
-
-            case 'Poll':
-                return (
-                    <PollMessage
-                        message={message}
-                        isOwnMessage={isOwnMessage(message)}
-                        conversationId={conversationId}
-                    />
                 );
 
             default:
                 return (
-                    <p className="text-sm">{message.content || 'Tin nhắn không có nội dung'}</p>
+                    <p className="text-sm text-muted-foreground italic">
+                        Loại tin nhắn không được hỗ trợ: {typeof message.messageType === 'number' ?
+                            ['Text', 'Image', 'File', 'System', 'Poll'][message.messageType - 1] || 'Unknown' :
+                            message.messageType}
+                    </p>
                 );
         }
     }, [getAttachmentUrl, getAttachmentName, getAttachmentType, isImageUrl, partnerName, isOwnMessage, conversationId]);
@@ -336,8 +356,20 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
             >
                 <div className="space-y-4">
                     {conversationMessages.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                            <p className="text-sm">Chưa có tin nhắn nào</p>
+                        <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
+                            <div className="w-32 h-32 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-6">
+                                <MessageCircle className="w-16 h-16 text-[#ad46ff]" />
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                                Chào mừng đến với FastBite Chat
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400 text-lg mb-6 max-w-md">
+                                Hãy Gửi Một Tin Nhắn Để Bắt Đầu Một Cuộc Trò Chuyện.
+                            </p>
+                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                <div className="w-2 h-2 bg-[#ad46ff] rounded-full"></div>
+                                <span>{chatType === 'group' ? 'Trò chuyện nhóm' : 'Trò chuyện cá nhân'}</span>
+                            </div>
                         </div>
                     ) : (
                         conversationMessages.map((message) => {
@@ -389,6 +421,7 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                                     parentMessage={message.parentMessage}
                                                     isOwnMessage={own}
                                                     onScrollToMessage={scrollToMessage}
+                                                    parentMessageId={message.parentMessageId}
                                                 />
 
                                                 {/* Current Message Bubble */}
@@ -412,6 +445,7 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                                         message={message}
                                                         isOwnMessage={own}
                                                         onReplyToMessage={onReplyToMessage}
+                                                        onToggleReaction={handleToggleReaction}
                                                     />
                                                 </div>
 
@@ -456,6 +490,7 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                                     message={message}
                                                     isOwnMessage={own}
                                                     onReplyToMessage={onReplyToMessage}
+                                                    onToggleReaction={handleToggleReaction}
                                                 />
                                             </div>
                                         )}

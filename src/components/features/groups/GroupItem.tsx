@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Globe, Lock, Users } from "lucide-react";
+import { MessagePreview } from "../chat/MessagePreview";
 
 interface Group {
     groupId: string;
@@ -12,6 +13,7 @@ interface Group {
     avatarUrl?: string | null;
     lastMessagePreview?: string;
     lastMessageTimestamp?: string;
+    lastMessageType?: string;
     unreadCount?: number;
     groupType?: "Public" | "Private" | "Community";
     memberCount?: number;
@@ -29,6 +31,22 @@ const truncateToWords = (text: string, maxWords: number = 4): string => {
     const words = text.trim().split(/\s+/);
     if (words.length <= maxWords) return text;
     return words.slice(0, maxWords).join(" ") + "...";
+};
+
+// Generate default description based on group type
+const getDefaultDescription = (groupType?: string, groupName?: string): string => {
+    const name = groupName || "Nhóm";
+
+    switch (groupType) {
+        case "Private":
+            return `Chia sẻ thông tin nội bộ và trò chuyện an toàn`;
+        case "Public":
+            return `Kết nối và chia sẻ với cộng đồng rộng lớn`;
+        case "Community":
+            return `Nơi giao lưu và học hỏi từ nhiều thành viên`;
+        default:
+            return `Nơi chia sẻ ý tưởng và kết nối với bạn bè`;
+    }
 };
 
 // Get group type display info
@@ -80,44 +98,60 @@ export function GroupItem({ group, isSelected = false, onClick }: GroupItemProps
             {/* Content */}
             <div className="flex-1 min-w-0">
                 {/* Header Row */}
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-start justify-between mb-1">
                     {/* Group Name */}
-                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate flex-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate flex-1 mr-2">
                         {truncatedName}
                     </h3>
 
-                    {/* Privacy Badge - Only show if groupType is available */}
-                    {group.groupType && (
-                        <Badge
-                            variant="secondary"
-                            className={cn(
-                                "text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 flex-shrink-0",
-                                groupTypeInfo.bgColor,
-                                groupTypeInfo.textColor
-                            )}
-                        >
-                            <TypeIcon className="w-3 h-3" />
-                            {groupTypeInfo.label}
-                        </Badge>
-                    )}
+                    {/* Right side badges */}
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                        {/* Privacy Badge - Only show if groupType is available */}
+                        {group.groupType && (
+                            <Badge
+                                variant="secondary"
+                                className={cn(
+                                    "text-xs px-2 py-0.5 rounded-full font-medium flex items-center justify-center gap-1 h-5 min-w-fit leading-none",
+                                    groupTypeInfo.bgColor,
+                                    groupTypeInfo.textColor
+                                )}
+                            >
+                                <TypeIcon className="w-3 h-3 flex-shrink-0" />
+                                <span className="whitespace-nowrap text-xs leading-none">{groupTypeInfo.label}</span>
+                            </Badge>
+                        )}
 
-                    {/* Member Count */}
-                    {group?.memberCount !== undefined && (
-                        <Badge
-                            variant="secondary"
-                            className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex items-center gap-1 flex-shrink-0"
-                        >
-                            <Users className="w-3 h-3" />
-                            {group.memberCount}
-                        </Badge>
-                    )}
+                        {/* Member Count */}
+                        {group?.memberCount !== undefined && (
+                            <Badge
+                                variant="secondary"
+                                className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1 h-5 min-w-fit leading-none"
+                            >
+                                <Users className="w-3 h-3 flex-shrink-0" />
+                                <span className="whitespace-nowrap text-xs leading-none">{group.memberCount}</span>
+                            </Badge>
+                        )}
+                    </div>
                 </div>
 
-                {/* Message Preview */}
-                <div className="flex items-center">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                        {group?.lastMessagePreview || "Chưa có tin nhắn nào"}
-                    </p>
+                {/* Group Description and Unread Count */}
+                <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                        {group.lastMessagePreview ? (
+                            <MessagePreview
+                                messageType={group.lastMessageType || 'Text'}
+                                content={group.lastMessagePreview}
+                                className="text-xs text-gray-500 dark:text-gray-400"
+                            />
+                        ) : (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {group?.description || getDefaultDescription(group.groupType, group.groupName)}
+                            </p>
+                        )}
+                    </div>
+                    {group.unreadCount && group.unreadCount > 0 && (
+                        <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0 ml-2" />
+                    )}
                 </div>
             </div>
         </div>

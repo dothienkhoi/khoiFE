@@ -309,6 +309,13 @@ export interface MessageReaction {
     displayName: string;
 }
 
+export interface ParentMessage {
+    senderName: string;
+    contentSnippet: string;
+    messageType?: 'Text' | 'Image' | 'File' | 'System' | 'Poll';
+    parentMessageId?: string | null; // ID của tin nhắn gốc để scroll đến
+}
+
 export interface Message {
     id: string;
     conversationId: number;
@@ -320,7 +327,7 @@ export interface Message {
     attachments: MessageAttachment[];
     reactions: MessageReaction[];
     parentMessageId: string | null;
-    parentMessage: Message | null;
+    parentMessage: ParentMessage | null;
 }
 
 export interface MessageHistoryResponse {

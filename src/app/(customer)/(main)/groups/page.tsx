@@ -11,6 +11,7 @@ interface Group {
     description: string;
     avatarUrl?: string | null;
     groupType?: "Public" | "Private" | "Community";
+    memberCount?: number;
     conversationId?: number; // Add conversationId for API calls
 }
 
@@ -48,6 +49,8 @@ export default function GroupsPage() {
                     groupName={selectedGroup?.groupName}
                     groupAvatar={selectedGroup?.avatarUrl || undefined}
                     groupType={selectedGroup?.groupType}
+                    memberCount={selectedGroup?.memberCount}
+                    description={selectedGroup?.description}
                 />
             </div>
         </div>

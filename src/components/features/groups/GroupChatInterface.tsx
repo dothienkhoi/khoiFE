@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { MessageCircle, Search, Phone, Video, Users, Settings, Lock, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +14,9 @@ import { sendGroupMessage, uploadFilesToGroup } from "@/lib/customer-api-client"
 import { Message } from "@/types/customer.types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { WelcomeScreen } from "../welcome/WelcomeScreen";
+import { useChatHub } from "@/components/providers/ChatHubProvider";
+import { getMessagePreview } from "@/lib/utils/messageUtils";
 
 interface GroupChatInterfaceProps {
     groupId?: string;
@@ -21,16 +24,51 @@ interface GroupChatInterfaceProps {
     groupName?: string;
     groupAvatar?: string;
     groupType?: "Public" | "Private" | "Community";
+    memberCount?: number;
+    description?: string;
 }
 
-export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType }: GroupChatInterfaceProps) {
-    const { addMessage, updateMessage } = useCustomerStore();
+export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType, memberCount, description }: GroupChatInterfaceProps) {
+    const { addMessage, updateMessage, updateConversation } = useCustomerStore();
     const { user: currentUser } = useAuthStore();
+    const { isConnected: isChatHubConnected } = useChatHub();
 
     const [isUploading, setIsUploading] = useState(false);
     const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
     const actualConversationId = conversationId || (groupId ? Number(groupId) : null);
+
+    // Reset unread count when entering group chat
+    const resetUnreadCount = () => {
+        if (actualConversationId) {
+            window.dispatchEvent(new CustomEvent('resetGroupUnreadCount', {
+                detail: { conversationId: actualConversationId }
+            }));
+        }
+    };
+
+    // Reset unread count when component mounts
+    useEffect(() => {
+        if (actualConversationId) {
+            resetUnreadCount();
+        }
+    }, [actualConversationId]);
+
+    // Generate default description based on group type
+    const getDefaultDescription = (groupType?: string, groupName?: string): string => {
+        const name = groupName || "Nhóm";
+
+        switch (groupType) {
+            case "Private":
+                return `Chia sẻ thông tin nội bộ và trò chuyện an toàn`;
+            case "Public":
+                return `Kết nối và chia sẻ với cộng đồng rộng lớn`;
+            case "Community":
+                return `Nơi giao lưu và học hỏi từ nhiều thành viên`;
+            default:
+                return `Nơi chia sẻ ý tưởng và kết nối với bạn bè`;
+        }
+    };
 
     // Get group type display info
     const getGroupTypeInfo = (groupType?: string) => {
@@ -76,11 +114,23 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                 attachments: [],
                 reactions: [],
                 parentMessageId: replyTo?.id || null,
-                parentMessage: replyTo || null
+                parentMessage: replyTo ? {
+                    senderName: replyTo.sender.displayName,
+                    contentSnippet: replyTo.content,
+                    messageType: replyTo.messageType,
+                    parentMessageId: replyTo.id
+                } : null
             };
 
             // Add optimistic message to UI immediately
             addMessage(actualConversationId!, optimisticMessage);
+
+            // Update conversation preview immediately for real-time display
+            updateConversation(actualConversationId!, {
+                lastMessagePreview: optimisticMessage.content,
+                lastMessageTimestamp: optimisticMessage.sentAt,
+                lastMessageType: optimisticMessage.messageType
+            });
 
             // Send message via API
             const response = await sendGroupMessage(groupId!, {
@@ -97,6 +147,10 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                     id: realMessage.id,
                     sentAt: realMessage.sentAt,
                     sender: realMessage.sender,
+                    parentMessage: realMessage.parentMessage ? {
+                        ...realMessage.parentMessage,
+                        parentMessageId: realMessage.parentMessageId
+                    } : null,
                     // Keep other fields from optimistic message
                 });
 
@@ -143,23 +197,14 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
     // If no group is selected, show welcome screen
     if (!groupId || !groupName) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
-                <div className="w-32 h-32 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-6">
-                    <MessageCircle className="w-16 h-16 text-[#ad46ff]" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                    Chào mừng đến với FastBite Chat
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 text-lg mb-6 max-w-md">
-                    Chọn một nhóm từ danh sách bên trái để bắt đầu nhắn tin
-                </p>
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                    <div className="w-2 h-2 bg-[#ad46ff] rounded-full"></div>
-                    <span>Trò chuyện cá nhân</span>
-                    <div className="w-2 h-2 bg-[#1447e6] rounded-full ml-4"></div>
-                    <span>Trò chuyện nhóm</span>
-                </div>
-            </div>
+            <WelcomeScreen
+                userName={currentUser?.fullName || "Người dùng"}
+                onNewChat={() => {
+                    // TODO: Implement new group functionality
+                    console.log('New group clicked');
+                }}
+                type="group"
+            />
         );
     }
 
@@ -193,7 +238,29 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                                     {groupTypeInfo.label}
                                 </Badge>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Nhóm chat</p>
+                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                {memberCount !== undefined && memberCount > 0 && (
+                                    <>
+                                        <span className="flex items-center gap-1">
+                                            <Users className="w-3 h-3" />
+                                            {memberCount} thành viên
+                                        </span>
+                                        <span>•</span>
+                                    </>
+                                )}
+                                {(memberCount === undefined || memberCount === 0) && (
+                                    <>
+                                        <span className="flex items-center gap-1">
+                                            <Users className="w-3 h-3" />
+                                            Chưa có thành viên
+                                        </span>
+                                        <span>•</span>
+                                    </>
+                                )}
+                                <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                                    {description || getDefaultDescription(groupType, groupName)}
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -224,17 +291,18 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                     partnerName={groupName}
                     partnerAvatar={groupAvatar}
                     onReplyToMessage={setReplyToMessage}
+                    chatType="group"
                 />
             </div>
 
             {/* Message input */}
-            <div className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 min-h-[80px] rounded-t-2xl">
+            <div>
                 <ChatInput
                     onSendMessage={handleMessageInput}
                     conversationId={actualConversationId!}
                     disabled={isUploading}
                     placeholder="Nhập tin nhắn..."
-                    replyTo={replyToMessage as any}
+                    replyTo={replyToMessage}
                     onCancelReply={() => setReplyToMessage(null)}
                 />
             </div>

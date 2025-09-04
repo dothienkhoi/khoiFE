@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getGroupConversations, getGroups } from "@/lib/customer-api-client";
 import { safeToLowerCase } from "@/lib/utils";
+import { getMessagePreview } from "@/lib/utils/messageUtils";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { GroupItem } from "./GroupItem";
 
@@ -47,17 +48,11 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                     getGroupConversations()
                 ]);
 
-                // Debug logging
-                console.log("Groups API response:", groupsResponse);
-                console.log("Conversations API response:", conversationsResponse);
-
                 // Process and merge data
                 const mergedGroups = mergeGroupsAndConversations(
                     groupsResponse.success ? groupsResponse.data?.items || [] : [],
                     conversationsResponse.success ? conversationsResponse.data || [] : []
                 );
-
-                console.log("Merged groups:", mergedGroups);
 
                 setGroups(mergedGroups);
             } catch (error) {
@@ -71,6 +66,61 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
         fetchGroups();
     }, []);
 
+    // Listen for real-time message updates
+    useEffect(() => {
+        const handleNewMessage = (event: CustomEvent) => {
+            const { conversationId, message, isFromCurrentUser } = event.detail;
+
+            // Only update if message is from another user and we're not currently viewing this conversation
+            if (!isFromCurrentUser && selectedGroupId !== conversationId.toString()) {
+                const messagePreview = getMessagePreview(
+                    message.messageType,
+                    message.content,
+                    message.sender.displayName
+                );
+
+                setGroups(prevGroups =>
+                    prevGroups.map(group => {
+                        if (group.conversationId === conversationId) {
+                            return {
+                                ...group,
+                                unreadCount: (group.unreadCount || 0) + 1,
+                                lastMessagePreview: messagePreview,
+                                lastMessageTimestamp: message.sentAt,
+                                lastMessageType: message.messageType
+                            };
+                        }
+                        return group;
+                    })
+                );
+            }
+        };
+
+        const handleResetUnreadCount = (event: CustomEvent) => {
+            const { conversationId } = event.detail;
+
+            setGroups(prevGroups =>
+                prevGroups.map(group => {
+                    if (group.conversationId === conversationId) {
+                        return {
+                            ...group,
+                            unreadCount: 0
+                        };
+                    }
+                    return group;
+                })
+            );
+        };
+
+        window.addEventListener('newMessageReceived', handleNewMessage as EventListener);
+        window.addEventListener('resetGroupUnreadCount', handleResetUnreadCount as EventListener);
+
+        return () => {
+            window.removeEventListener('newMessageReceived', handleNewMessage as EventListener);
+            window.removeEventListener('resetGroupUnreadCount', handleResetUnreadCount as EventListener);
+        };
+    }, [selectedGroupId]);
+
     // Filter groups based on search term with safe null checks
     const filteredGroups = Array.isArray(groups) ? groups.filter(group =>
         group &&
@@ -82,6 +132,17 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
     // Handle group selection
     const handleGroupSelect = (group: Group) => {
         onGroupSelect(group);
+
+        // Reset unread count when group is selected
+        if (group.unreadCount && group.unreadCount > 0) {
+            setGroups(prevGroups =>
+                prevGroups.map(g =>
+                    g.groupId === group.groupId
+                        ? { ...g, unreadCount: 0 }
+                        : g
+                )
+            );
+        }
     };
 
     // Helper function to merge groups and conversations data
@@ -146,7 +207,7 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                 if (!conversation) {
                     console.warn(`No conversation found for group: ${group.groupName} (${group.groupId})`);
                 } else {
-                    console.log(`Mapped group "${group.groupName}" to conversation ${conversation.conversationId}`);
+                    // Mapped group to conversation
                 }
 
                 return {
@@ -158,7 +219,7 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                     lastMessageTimestamp: conversation?.lastMessageTimestamp || null,
                     unreadCount: conversation?.unreadCount || 0,
                     groupType: group.groupType || undefined,
-                    memberCount: group.memberCount || 1,
+                    groupMemberCount: group.memberCount || 1,
                     conversationId: conversation?.conversationId // Use conversationId from conversation
                 };
             });
@@ -297,16 +358,6 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                                 : "Tạo nhóm mới hoặc tìm kiếm nhóm để tham gia"
                             }
                         </p>
-                        {!searchTerm && (
-                            <Button
-                                size="sm"
-                                className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] hover:from-[#ad46ff]/90 hover:to-[#1447e6]/90 text-white"
-                                onClick={() => setIsCreateGroupOpen(true)}
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Tạo nhóm mới
-                            </Button>
-                        )}
                     </div>
                 )}
             </div>

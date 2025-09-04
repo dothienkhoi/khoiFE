@@ -21,8 +21,7 @@ import {
 } from "lucide-react";
 import { ChatMessage as ChatMessageType } from "@/types/customer.types";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { vi } from "date-fns/locale";
+import { formatMessageTime } from "@/lib/dateUtils";
 import { ReplyMessage } from "../boback/ReplyMessage";
 
 interface ChatMessageProps {
@@ -54,10 +53,7 @@ export function ChatMessage({
         }
     };
 
-    const formatTime = (timestamp: string) => {
-        const date = new Date(timestamp);
-        return format(date, 'HH:mm', { locale: vi });
-    };
+
 
     const renderMessageContent = () => {
         switch (message.messageType) {
@@ -443,7 +439,7 @@ export function ChatMessage({
                     isOwnMessage ? "justify-end" : "justify-start"
                 )}>
                     <span className="text-xs text-muted-foreground">
-                        {formatTime(message.timestamp)}
+                        {formatMessageTime(message.timestamp)}
                     </span>
 
                     {isOwnMessage && (

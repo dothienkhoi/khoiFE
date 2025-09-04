@@ -8,18 +8,7 @@ import { useProfile } from "@/components/providers/ProfileProvider";
 export function ProfileInfo() {
     const { userProfile, isRefreshing } = useProfile();
 
-    // Debug logging
-    console.log("[ProfileInfo] Rendering with profile:", userProfile);
-    console.log("[ProfileInfo] Is refreshing:", isRefreshing);
-    console.log("[ProfileInfo] Profile details:", {
-        firstName: userProfile?.firstName,
-        lastName: userProfile?.lastName,
-        dateOfBirth: userProfile?.dateOfBirth,
-        bio: userProfile?.bio,
-        email: userProfile?.email,
-        twoFactorEnabled: userProfile?.twoFactorEnabled,
-        emailConfirmed: userProfile?.emailConfirmed
-    });
+    // Profile info rendering
 
     if (!userProfile) return null;
 

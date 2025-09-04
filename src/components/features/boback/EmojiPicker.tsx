@@ -62,7 +62,7 @@ export function EmojiPicker({ isOpen, onClose, onEmojiSelect, disabled = false }
     };
 
     return (
-        <div className="absolute bottom-full left-0 mb-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 min-w-[320px] max-w-[400px]">
+        <div className="absolute bottom-full left-0 mb-8 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl z-50 min-w-[320px] max-w-[400px]">
             {/* Header */}
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700">
                 <h3 className="font-semibold text-sm text-gray-900 dark:text-white">Chọn emoji</h3>

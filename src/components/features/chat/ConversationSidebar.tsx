@@ -1,22 +1,102 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Search,
     Plus,
-    User
+    User,
+    MessageCircle
 } from "lucide-react";
 import { useCustomerStore } from "@/store/customerStore";
 import { Conversation } from "@/types/customer.types";
 import { cn } from "@/lib/utils";
 import { UserSearchPopup } from "@/components/providers/UserSearchPopup";
+import { formatLastSeen, formatMessageTime } from "@/lib/dateUtils";
+import { getMessagePreview } from "@/lib/utils/messageUtils";
+import { MessagePreview } from "./MessagePreview";
+
+// Helper function to truncate long names
+const truncateName = (name: string, maxLength: number = 8) => {
+    if (name.length <= maxLength) return name;
+    return name.substring(0, maxLength) + '...';
+};
+
+// Conversation Item Component with real-time updates
+interface ConversationItemProps {
+    conversation: Conversation;
+    isActive: boolean;
+    onSelect: (conversation: Conversation) => void;
+    lastUpdateTime: number;
+}
+
+function ConversationItem({ conversation, isActive, onSelect, lastUpdateTime }: ConversationItemProps) {
+    // Force re-render when lastUpdateTime changes
+    const timestamp = useMemo(() => {
+        if (conversation.lastMessageTimestamp) {
+            return formatMessageTime(conversation.lastMessageTimestamp);
+        }
+        return null;
+    }, [conversation.lastMessageTimestamp, lastUpdateTime]);
+
+    return (
+        <div
+            className={cn(
+                "group flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all duration-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md border border-transparent hover:border-gray-200 dark:hover:border-gray-700",
+                isActive && "bg-[#ad46ff]/10 border-[#ad46ff]/20 shadow-lg"
+            )}
+            onClick={() => onSelect(conversation)}
+        >
+            <Avatar className="h-12 w-12 ring-2 ring-gray-200 dark:ring-gray-700">
+                <AvatarImage src={conversation.avatarUrl} />
+                <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-bold text-lg">
+                    {(conversation.displayName || 'Unknown').split(' ').map(n => n[0]).join('')}
+                </AvatarFallback>
+            </Avatar>
+
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                    <p className="font-bold text-gray-900 dark:text-white text-base">
+                        {truncateName(conversation.displayName || 'Unknown User')}
+                    </p>
+                    {timestamp && (
+                        <span className="text-xs text-gray-500 font-medium">
+                            {timestamp}
+                        </span>
+                    )}
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                        {conversation.lastMessagePreview ? (
+                            <MessagePreview
+                                messageType={conversation.lastMessageType || 'Text'}
+                                content={conversation.lastMessagePreview}
+                                className="text-sm text-gray-600 dark:text-gray-400"
+                            />
+                        ) : (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                                Chưa có tin nhắn nào
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                        {conversation.unreadCount > 0 && (
+                            <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0" />
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export function ConversationSidebar() {
     const [searchQuery, setSearchQuery] = useState("");
     const [isUserSearchOpen, setIsUserSearchOpen] = useState(false);
+    const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
 
     const {
         conversations,
@@ -24,7 +104,8 @@ export function ConversationSidebar() {
         activeChatType,
         setActiveChat,
         refreshConversations,
-        markConversationAsRead
+        markConversationAsRead,
+        updateConversation
     } = useCustomerStore();
 
     // Load conversations on mount
@@ -51,6 +132,46 @@ export function ConversationSidebar() {
         };
     }, [refreshConversations, setActiveChat]);
 
+    // Listen for real-time message updates
+    useEffect(() => {
+        const handleNewMessage = (event: CustomEvent) => {
+            const { conversationId, message, isFromCurrentUser } = event.detail;
+
+            // Update last update time to force re-render
+            setLastUpdateTime(Date.now());
+
+            // Update conversation in store for real-time preview
+            const conversation = conversations.find(c => c.conversationId === conversationId);
+            if (conversation) {
+                const messagePreview = getMessagePreview(
+                    message.messageType,
+                    message.content,
+                    message.sender.displayName
+                );
+
+                updateConversation(conversationId, {
+                    lastMessagePreview: messagePreview,
+                    lastMessageTimestamp: message.sentAt
+                });
+            }
+        };
+
+        window.addEventListener('newMessageReceived', handleNewMessage as EventListener);
+
+        return () => {
+            window.removeEventListener('newMessageReceived', handleNewMessage as EventListener);
+        };
+    }, [conversations, updateConversation]);
+
+    // Update time every minute for real-time display
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setLastUpdateTime(Date.now());
+        }, 60000); // Update every minute
+
+        return () => clearInterval(interval);
+    }, []);
+
     // Filter conversations based on search
     const filteredConversations = conversations.filter(conversation =>
         (conversation.displayName || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -61,21 +182,15 @@ export function ConversationSidebar() {
 
         // Mark conversation as read if it has unread messages
         if (conversation.unreadCount > 0) {
+            // Reset unread count immediately for better UX
+            updateConversation(conversation.conversationId, { unreadCount: 0 });
+
+            // Then call API to mark as read
             await markConversationAsRead(conversation.conversationId);
         }
     };
 
-    const formatLastSeen = (lastSeen?: string) => {
-        if (!lastSeen) return '';
-        const date = new Date(lastSeen);
-        const now = new Date();
-        const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
 
-        if (diffInMinutes < 1) return 'Vừa xong';
-        if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
-        if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
-        return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
-    };
 
     return (
         <div className="flex flex-col h-full">
@@ -112,58 +227,26 @@ export function ConversationSidebar() {
             {/* Conversations List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {filteredConversations.length === 0 ? (
-                    <div className="text-center py-12 text-gray-500">
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <User className="h-8 w-8 text-gray-400" />
+                    <div className="flex flex-col items-center justify-center h-full text-center">
+                        <div className="w-16 h-16 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-4">
+                            <User className="w-8 h-8 text-[#ad46ff]" />
                         </div>
-                        <p className="text-base font-medium">Không có cuộc trò chuyện nào</p>
-                        <p className="text-sm text-gray-400 mt-2">Tìm kiếm người để bắt đầu trò chuyện</p>
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
+                            Không có cuộc trò chuyện nào
+                        </h3>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+                            Tìm kiếm người để bắt đầu trò chuyện
+                        </p>
                     </div>
                 ) : (
                     filteredConversations.map((conversation) => (
-                        <div
+                        <ConversationItem
                             key={conversation.conversationId}
-                            className={cn(
-                                "group flex items-center gap-4 p-4 rounded-2xl cursor-pointer transition-all duration-300 hover:bg-gray-50 dark:hover:bg-gray-800 hover:shadow-md border border-transparent hover:border-gray-200 dark:hover:border-gray-700",
-                                activeChatId === conversation.conversationId.toString() && activeChatType === 'direct' && "bg-[#ad46ff]/10 border-[#ad46ff]/20 shadow-lg"
-                            )}
-                            onClick={() => handleConversationClick(conversation)}
-                        >
-                            <Avatar className="h-12 w-12 ring-2 ring-gray-200 dark:ring-gray-700">
-                                <AvatarImage src={conversation.avatarUrl} />
-                                <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-bold text-lg">
-                                    {(conversation.displayName || 'Unknown').split(' ').map(n => n[0]).join('')}
-                                </AvatarFallback>
-                            </Avatar>
-
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-2">
-                                    <p className="font-bold text-gray-900 dark:text-white text-base">
-                                        {conversation.displayName || 'Unknown User'}
-                                    </p>
-                                    {conversation.lastMessageTimestamp && (
-                                        <span className="text-xs text-gray-500 font-medium">
-                                            {formatLastSeen(conversation.lastMessageTimestamp)}
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                                        {conversation.lastMessagePreview ? (
-                                            conversation.lastMessagePreview
-                                        ) : (
-                                            'Chưa có tin nhắn nào'
-                                        )}
-                                    </p>
-                                    <div className="flex items-center gap-1">
-                                        {conversation.unreadCount > 0 && (
-                                            <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0" />
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                            conversation={conversation}
+                            isActive={activeChatId === conversation.conversationId.toString() && activeChatType === 'direct'}
+                            onSelect={handleConversationClick}
+                            lastUpdateTime={lastUpdateTime}
+                        />
                     ))
                 )}
             </div>

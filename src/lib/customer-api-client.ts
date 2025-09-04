@@ -1202,22 +1202,16 @@ export const sendConversationMessage = async (
 
 /**
  * Mark a conversation as read
+ * Note: This is handled by SignalR ChatHub, not API
  */
 export const markConversationAsRead = async (conversationId: number): Promise<CustomerApiResponse<void>> => {
-    try {
-        const response = await customerApiClient.post<CustomerApiResponse<void>>(
-            `/conversations/${conversationId}/mark-as-read`
-        );
-        console.log('[API] Mark conversation as read successful:', conversationId);
-        return response.data;
-    } catch (error: any) {
-        console.error('[API] Mark conversation as read failed:', error?.response?.status, error?.message);
-        return {
-            success: false,
-            message: error.response?.data?.message || error.message || 'Failed to mark conversation as read',
-            data: undefined
-        } as CustomerApiResponse<void>;
-    }
+    // SignalR handles mark-as-read automatically
+    const response: CustomerApiResponse<void> = {
+        success: true,
+        message: 'Marked as read via SignalR',
+        data: undefined
+    };
+    return response;
 };
 
 /**

@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { uploadFilesToConversation } from "@/lib/customer-api-client";
 import { toast } from "sonner";
 import { useCustomerStore } from "@/store/customerStore";
+import { useAuthStore } from "@/store/authStore";
+import { useChatHub } from "@/components/providers/ChatHubProvider";
+import { getMessagePreview, getMessageTypeFromFile } from "@/lib/utils/messageUtils";
 import { EmojiPicker } from "../boback/EmojiPicker";
 import { AttachmentPopup } from "./AttachmentPopup";
 import { FilePreview } from "../boback/FilePreview";
@@ -46,6 +49,8 @@ export function ChatInput({
     placeholder = "Nhập tin nhắn...",
     conversationId
 }: ChatInputProps) {
+    const { startTyping, stopTyping } = useChatHub();
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const [message, setMessage] = useState("");
     const [isTyping, setIsTyping] = useState(false);
     const [showAttachments, setShowAttachments] = useState(false);
@@ -61,7 +66,8 @@ export function ChatInput({
     const attachmentRef = useRef<HTMLDivElement>(null);
     const emojiPickerRef = useRef<HTMLDivElement>(null);
 
-    const { addMessage } = useCustomerStore();
+    const { addMessage, updateMessage, updateConversation, removeMessage } = useCustomerStore();
+    const { user: currentUser } = useAuthStore();
 
     // Auto-focus textarea on mount
     useEffect(() => {
@@ -143,7 +149,24 @@ export function ChatInput({
         } else if (!value.trim() && isTyping) {
             setIsTyping(false);
         }
-    }, [isTyping]);
+
+        // SignalR typing indicators
+        if (conversationId && value.length > 0) {
+            startTyping(conversationId);
+
+            // Clear previous timeout
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+
+            // Set new timeout to stop typing
+            typingTimeoutRef.current = setTimeout(() => {
+                if (conversationId) {
+                    stopTyping(conversationId);
+                }
+            }, 2000); // Stop typing after 2 seconds of inactivity
+        }
+    }, [isTyping, conversationId, startTyping, stopTyping]);
 
     // Send message function
     const handleSendMessage = useCallback(async () => {
@@ -165,21 +188,81 @@ export function ChatInput({
         if ((!hasContent && !hasFiles) || disabled) return;
 
         setIsUploading(true);
+        let optimisticMessages: any[] = [];
 
         try {
             // Handle file uploads
             if (hasFiles && conversationId) {
                 const files = selectedFiles.map(fp => fp.file);
+
+                // Create optimistic messages for files
+                optimisticMessages = selectedFiles.map((filePreview, index) => {
+                    const messageType = getMessageTypeFromFile(filePreview.file.type);
+                    const messagePreview = getMessagePreview(
+                        messageType,
+                        filePreview.file.name,
+                        currentUser?.fullName || 'Bạn'
+                    );
+
+                    return {
+                        id: `temp-${Date.now()}-${index}`,
+                        conversationId: conversationId!,
+                        content: messagePreview,
+                        messageType: messageType,
+                        sender: {
+                            userId: currentUser?.id || 'current-user',
+                            displayName: currentUser?.fullName || 'Bạn',
+                            avatarUrl: currentUser?.avatarUrl || null
+                        },
+                        sentAt: new Date().toISOString(),
+                        isDeleted: false,
+                        attachments: [],
+                        reactions: [],
+                        parentMessageId: replyTo?.id || null,
+                        parentMessage: replyTo ? {
+                            senderName: replyTo.sender.displayName,
+                            contentSnippet: replyTo.content.substring(0, 50)
+                        } : null
+                    };
+                });
+
+                // Add optimistic messages to store
+                optimisticMessages.forEach((msg: any) => {
+                    addMessage(conversationId, msg as unknown as Message);
+                });
+
+                // Update conversation preview immediately for real-time display
+                if (optimisticMessages.length > 0) {
+                    const firstMessage = optimisticMessages[0];
+                    updateConversation(conversationId, {
+                        lastMessagePreview: firstMessage.content,
+                        lastMessageTimestamp: firstMessage.sentAt,
+                        lastMessageType: firstMessage.messageType
+                    });
+                }
+
                 const response = await uploadFilesToConversation(conversationId, files);
 
                 if (response.success) {
                     const createdMessages = response.data || [];
 
-                    // Add messages to store
-                    createdMessages.forEach((msg: any) => {
-                        addMessage(conversationId, msg as unknown as Message);
+                    // Update optimistic messages with real data
+                    createdMessages.forEach((msg: any, index: number) => {
+                        if (optimisticMessages[index]) {
+                            updateMessage(conversationId, optimisticMessages[index].id, {
+                                id: msg.id,
+                                content: msg.content,
+                                attachments: msg.attachments,
+                                sentAt: msg.sentAt
+                            });
+                        }
                     });
                 } else {
+                    // Remove optimistic messages if API failed
+                    optimisticMessages.forEach((msg: any) => {
+                        removeMessage(conversationId, msg.id);
+                    });
+
                     // Check if it's a file type error
                     if (response.errors && Array.isArray(response.errors) && response.errors.length > 0) {
                         const fileTypeError = response.errors.find((error: any) => {
@@ -210,6 +293,15 @@ export function ChatInput({
                     ? trimmedMessage.replace(/(.{50})/g, '$1\n').trim()
                     : trimmedMessage;
                 onSendMessage(formattedMessage, 'text', replyTo || undefined);
+
+                // Update conversation preview for text messages
+                if (conversationId) {
+                    updateConversation(conversationId, {
+                        lastMessagePreview: formattedMessage,
+                        lastMessageTimestamp: new Date().toISOString(),
+                        lastMessageType: 'Text'
+                    });
+                }
             }
 
             // Reset state after successful send
@@ -229,6 +321,12 @@ export function ChatInput({
             }
 
         } catch (error: any) {
+            // Remove optimistic messages if there's an error
+            if (hasFiles && conversationId) {
+                optimisticMessages.forEach((msg: any) => {
+                    removeMessage(conversationId, msg.id);
+                });
+            }
 
             // Check if it's a file type error from API response
             if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
@@ -583,10 +681,6 @@ export function ChatInput({
                             overflowWrap: 'break-word'
                         }}
                     />
-
-
-
-
                 </div>
 
                 {/* Send Button */}

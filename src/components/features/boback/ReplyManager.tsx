@@ -1,6 +1,6 @@
 "use client";
 
-import { Message } from "@/types/customer.types";
+import { Message, ParentMessage } from "@/types/customer.types";
 import { ReplyPreview } from "./ReplyPreview";
 import { ReplyMessage } from "./ReplyMessage";
 import { MessageReplyActions } from "./MessageReplyActions";
@@ -11,13 +11,15 @@ interface ReplyManagerProps {
     onCancelReply?: () => void;
 
     // For ReplyMessage (in message list)
-    parentMessage?: Message | null;
+    parentMessage?: ParentMessage | null;
+    parentMessageId?: string | null; // Thêm prop này
     isOwnMessage?: boolean;
     onScrollToMessage?: (messageId: string) => void;
 
     // For MessageReplyActions
     message: Message;
     onReplyToMessage?: (message: Message) => void;
+    onToggleReaction?: (message: Message, reactionCode: string) => void;
 
     // Display mode
     mode: 'preview' | 'message' | 'actions';
@@ -28,10 +30,12 @@ export function ReplyManager({
     replyTo,
     onCancelReply,
     parentMessage,
+    parentMessageId,
     isOwnMessage = false,
     onScrollToMessage,
     message,
     onReplyToMessage,
+    onToggleReaction,
     mode,
     className
 }: ReplyManagerProps) {
@@ -50,6 +54,7 @@ export function ReplyManager({
                     parentMessage={parentMessage}
                     isOwnMessage={isOwnMessage}
                     onScrollToMessage={onScrollToMessage}
+                    parentMessageId={parentMessageId}
                     className={className}
                 />
             ) : null;
@@ -60,6 +65,7 @@ export function ReplyManager({
                     message={message}
                     isOwnMessage={isOwnMessage}
                     onReplyToMessage={onReplyToMessage}
+                    onToggleReaction={onToggleReaction}
                     className={className}
                 />
             );
@@ -81,8 +87,9 @@ export function ReplyPreviewWrapper({ replyTo, onCancelReply }: { replyTo?: Mess
     );
 }
 
-export function ReplyMessageWrapper({ parentMessage, isOwnMessage, onScrollToMessage, className }: {
-    parentMessage?: Message | null;
+export function ReplyMessageWrapper({ parentMessage, parentMessageId, isOwnMessage, onScrollToMessage, className }: {
+    parentMessage?: ParentMessage | null;
+    parentMessageId?: string | null;
     isOwnMessage?: boolean;
     onScrollToMessage?: (messageId: string) => void;
     className?: string;
@@ -90,6 +97,7 @@ export function ReplyMessageWrapper({ parentMessage, isOwnMessage, onScrollToMes
     return (
         <ReplyManager
             parentMessage={parentMessage}
+            parentMessageId={parentMessageId}
             isOwnMessage={isOwnMessage}
             onScrollToMessage={onScrollToMessage}
             message={{} as Message} // Dummy for type safety
@@ -99,10 +107,11 @@ export function ReplyMessageWrapper({ parentMessage, isOwnMessage, onScrollToMes
     );
 }
 
-export function ReplyActionsWrapper({ message, isOwnMessage, onReplyToMessage, className }: {
+export function ReplyActionsWrapper({ message, isOwnMessage, onReplyToMessage, onToggleReaction, className }: {
     message: Message;
     isOwnMessage: boolean;
     onReplyToMessage?: (message: Message) => void;
+    onToggleReaction?: (message: Message, reactionCode: string) => void;
     className?: string;
 }) {
     return (
@@ -110,6 +119,7 @@ export function ReplyActionsWrapper({ message, isOwnMessage, onReplyToMessage, c
             message={message}
             isOwnMessage={isOwnMessage}
             onReplyToMessage={onReplyToMessage}
+            onToggleReaction={onToggleReaction}
             mode="actions"
             className={className}
         />

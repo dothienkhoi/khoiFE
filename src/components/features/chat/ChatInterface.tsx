@@ -10,6 +10,8 @@ import { ChatInput } from "./ChatInput";
 import { Message } from "@/types/customer.types";
 import { sendConversationMessage } from "@/lib/customer-api-client";
 import { toast } from "sonner";
+import { WelcomeScreen } from "../welcome/WelcomeScreen";
+import { useChatHub } from "@/components/providers/ChatHubProvider";
 
 export function ChatInterface() {
     const {
@@ -21,6 +23,7 @@ export function ChatInterface() {
     } = useCustomerStore();
 
     const { user: currentUser } = useAuthStore();
+    const { isConnected: isChatHubConnected } = useChatHub();
 
     const [isUploading, setIsUploading] = useState(false);
     const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
@@ -50,7 +53,12 @@ export function ChatInterface() {
                 attachments: [],
                 reactions: [],
                 parentMessageId: replyTo?.id || null,
-                parentMessage: replyTo || null
+                parentMessage: replyTo ? {
+                    senderName: replyTo.sender.displayName,
+                    contentSnippet: replyTo.content,
+                    messageType: replyTo.messageType,
+                    parentMessageId: replyTo.id
+                } : null
             };
 
             // Add optimistic message to UI immediately
@@ -67,10 +75,16 @@ export function ChatInterface() {
                 const realMessage = response.data as Message;
 
                 // Update the optimistic message with real data
+                const updatedParentMessage = realMessage.parentMessage ? {
+                    ...realMessage.parentMessage,
+                    parentMessageId: realMessage.parentMessageId // Đảm bảo có parentMessageId
+                } : null;
+
                 updateMessage(conversationId, optimisticMessage.id, {
                     id: realMessage.id,
                     sentAt: realMessage.sentAt,
                     sender: realMessage.sender,
+                    parentMessage: updatedParentMessage,
                     // Keep other fields from optimistic message
                 });
 
@@ -114,26 +128,16 @@ export function ChatInterface() {
         }
     }, [handleSendText, handleSendFiles]);
 
-    // If no active chat, show empty state
+    // If no active chat, show welcome screen
     if (!activeChatId || !activeChatType) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
-                <div className="w-32 h-32 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-6">
-                    <MessageCircle className="w-16 h-16 text-[#ad46ff]" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                    Chào mừng đến với FastBite Chat
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 text-lg mb-6 max-w-md">
-                    Chọn một cuộc trò chuyện từ danh sách bên trái để bắt đầu nhắn tin
-                </p>
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                    <div className="w-2 h-2 bg-[#ad46ff] rounded-full"></div>
-                    <span>Trò chuyện cá nhân</span>
-                    <div className="w-2 h-2 bg-[#1447e6] rounded-full ml-4"></div>
-                    <span>Trò chuyện nhóm</span>
-                </div>
-            </div>
+            <WelcomeScreen
+                userName={currentUser?.fullName || "Người dùng"}
+                onNewChat={() => {
+                    // TODO: Implement new chat functionality
+                    console.log('New chat clicked');
+                }}
+            />
         );
     }
 
@@ -162,11 +166,12 @@ export function ChatInterface() {
                     partnerName={currentConversation?.displayName || "Người dùng"}
                     partnerAvatar={currentConversation?.avatarUrl}
                     onReplyToMessage={setReplyToMessage}
+                    chatType="direct"
                 />
             </div>
 
             {/* Message input */}
-            <div className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4 min-h-[80px] rounded-t-2xl">
+            <div>
                 <ChatInput
                     onSendMessage={handleMessageInput}
                     conversationId={conversationId!}

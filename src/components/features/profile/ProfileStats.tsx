@@ -7,15 +7,6 @@ import { useProfile } from "@/components/providers/ProfileProvider";
 export function ProfileStats() {
     const { userProfile, isRefreshing } = useProfile();
 
-    // Debug logging
-    console.log("[ProfileStats] Rendering with profile:", userProfile);
-    console.log("[ProfileStats] Is refreshing:", isRefreshing);
-    console.log("[ProfileStats] Stats details:", {
-        followersCount: userProfile?.followersCount,
-        followingCount: userProfile?.followingCount,
-        postsCount: userProfile?.postsCount
-    });
-
     if (!userProfile) return null;
 
     return (
