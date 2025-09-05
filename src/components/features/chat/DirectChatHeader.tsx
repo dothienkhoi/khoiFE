@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
-    Video,
     Search,
     User,
     Phone,
@@ -18,6 +17,7 @@ import { Conversation, Message } from "@/types/customer.types";
 import { cn } from "@/lib/utils";
 import { useCustomerStore } from "@/store/customerStore";
 import UserProfileDialog from "./UserProfileDialog";
+import { VideoCallButton } from "../video-call/VideoCallButton";
 
 interface DirectChatHeaderProps {
     conversation: Conversation;
@@ -303,26 +303,12 @@ export function DirectChatHeader({
                         </div>
 
                         {/* Video call button */}
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={onVideoCall}
-                            disabled={!onVideoCall}
-                            className={cn(
-                                "h-10 w-10 p-0 rounded-full transition-all duration-200",
-                                isVideoCallActive
-                                    ? "bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                                    : "hover:bg-gray-100 dark:hover:bg-gray-800",
-                                !onVideoCall && "opacity-50 cursor-not-allowed"
-                            )}
-                            title={isVideoCallActive ? "Kết thúc cuộc gọi" : "Bắt đầu cuộc gọi video"}
-                        >
-                            {isVideoCallActive ? (
-                                <PhoneOff className="h-5 w-5" />
-                            ) : (
-                                <Video className="h-5 w-5" />
-                            )}
-                        </Button>
+                        <VideoCallButton
+                            recipientName={userName}
+                            recipientAvatar={userAvatar}
+                            conversationId={conversation.conversationId}
+                            className="h-10 w-10 p-0 rounded-full transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        />
 
                         {/* Thông tin người dùng button */}
                         <Button

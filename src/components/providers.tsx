@@ -6,6 +6,9 @@ import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { ProfileProvider } from "./providers/ProfileProvider";
 import { ChatHubProvider } from "./providers/ChatHubProvider";
+import { VideoCallProvider } from "@/contexts/VideoCallContext";
+import { VideoCallHubProvider } from "./providers/VideoCallHubProvider";
+import { VideoCallDialogs } from "@/components/features/video-call/VideoCallDialogs";
 import { useState } from "react";
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -21,7 +24,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <ProfileProvider>
           <ChatHubProvider>
-            {children}
+            <VideoCallProvider>
+              <VideoCallHubProvider>
+                {children}
+                <VideoCallDialogs />
+              </VideoCallHubProvider>
+            </VideoCallProvider>
           </ChatHubProvider>
         </ProfileProvider>
         <Toaster

@@ -3,18 +3,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Globe, Lock, Users } from "lucide-react";
-import { MessagePreview } from "../chat/MessagePreview";
+import { Globe, Lock } from "lucide-react";
 
 interface Group {
     groupId: string;
     groupName: string;
     description: string;
     avatarUrl?: string | null;
-    lastMessagePreview?: string;
-    lastMessageTimestamp?: string;
-    lastMessageType?: string;
-    unreadCount?: number;
     groupType?: "Public" | "Private" | "Community";
     memberCount?: number;
 }
@@ -120,38 +115,17 @@ export function GroupItem({ group, isSelected = false, onClick }: GroupItemProps
                                 <span className="whitespace-nowrap text-xs leading-none">{groupTypeInfo.label}</span>
                             </Badge>
                         )}
-
-                        {/* Member Count */}
-                        {group?.memberCount !== undefined && (
-                            <Badge
-                                variant="secondary"
-                                className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1 h-5 min-w-fit leading-none"
-                            >
-                                <Users className="w-3 h-3 flex-shrink-0" />
-                                <span className="whitespace-nowrap text-xs leading-none">{group.memberCount}</span>
-                            </Badge>
-                        )}
                     </div>
                 </div>
 
                 {/* Group Description and Unread Count */}
                 <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                        {group.lastMessagePreview ? (
-                            <MessagePreview
-                                messageType={group.lastMessageType || 'Text'}
-                                content={group.lastMessagePreview}
-                                className="text-xs text-gray-500 dark:text-gray-400"
-                            />
-                        ) : (
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                {group?.description || getDefaultDescription(group.groupType, group.groupName)}
-                            </p>
-                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {group?.description || getDefaultDescription(group.groupType, group.groupName)}
+                        </p>
                     </div>
-                    {group.unreadCount && group.unreadCount > 0 && (
-                        <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0 ml-2" />
-                    )}
+                    {/* Remove unread count display completely */}
                 </div>
             </div>
         </div>

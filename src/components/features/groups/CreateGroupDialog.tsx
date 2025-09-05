@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Upload, X, Loader2, Globe, Lock, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { createGroup } from "@/lib/customer-api-client";
+import { createGroup, uploadAvatarToStaging, updateGroupAvatar } from "@/lib/customer-api-client";
 
 interface CreateGroupDialogProps {
     open: boolean;
@@ -70,15 +70,44 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
         setIsSubmitting(true);
 
         try {
-            // Gọi API tạo nhóm thật
+            let avatarUrl = "";
+
+            // Upload avatar tạm thời nếu có
+            if (avatarFile) {
+                try {
+                    const avatarResponse = await uploadAvatarToStaging(avatarFile);
+                    if (avatarResponse.success && avatarResponse.data) {
+                        avatarUrl = avatarResponse.data.fileUrl; // Sử dụng fileUrl từ API response
+                    } else {
+                        toast.error("Không thể upload ảnh đại diện");
+                        return;
+                    }
+                } catch (avatarError) {
+                    console.error("Error uploading avatar:", avatarError);
+                    toast.error("Không thể upload ảnh đại diện");
+                    return;
+                }
+            }
+
+            // Tạo nhóm với avatar URL tạm thời
             const response = await createGroup({
                 groupName: name.trim(),
                 description: description.trim(),
                 groupType: groupType,
-                groupAvatarUrl: avatarPreview || undefined
+                groupAvatarUrl: avatarUrl || undefined
             });
 
             if (response.success && response.data) {
+                // Nếu có avatar file, cập nhật avatar vĩnh viễn
+                if (avatarFile && response.data.groupId) {
+                    try {
+                        await updateGroupAvatar(response.data.groupId, avatarFile);
+                    } catch (avatarError) {
+                        console.error("Error updating group avatar:", avatarError);
+                        // Không hiển thị lỗi vì nhóm đã tạo thành công
+                    }
+                }
+
                 // Hiển thị success message
                 setShowSuccess(true);
 

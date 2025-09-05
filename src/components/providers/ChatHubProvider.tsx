@@ -158,6 +158,83 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
             toast.error("Không thể thêm reaction");
         });
 
+        // Video Call Events
+        hubConnection.on("IncomingCall", (data: any) => {
+            console.log("[ChatHub] Incoming call received:", data);
+
+            if (isComponentMounted.current) {
+                // Dispatch custom event for VideoCallContext
+                window.dispatchEvent(new CustomEvent('incomingCall', {
+                    detail: {
+                        sessionId: data.videoCallSessionId,
+                        callerName: data.caller.displayName,
+                        callerAvatar: data.caller.avatarUrl,
+                        conversationId: data.conversationId
+                    }
+                }));
+
+                // Show toast notification
+                toast.info("📞 Cuộc gọi đến", {
+                    description: `${data.caller.displayName} đang gọi cho bạn`,
+                    duration: 5000,
+                });
+            }
+        });
+
+        hubConnection.on("CallAccepted", (data: any) => {
+            console.log("[ChatHub] Call accepted:", data);
+
+            if (isComponentMounted.current) {
+                window.dispatchEvent(new CustomEvent('callAccepted', {
+                    detail: {
+                        sessionId: data.videoCallSessionId,
+                        callerName: data.callerName
+                    }
+                }));
+
+                toast.success("✅ Cuộc gọi được chấp nhận", {
+                    description: "Bắt đầu phiên video call",
+                    duration: 3000,
+                });
+            }
+        });
+
+        hubConnection.on("CallRejected", (data: any) => {
+            console.log("[ChatHub] Call rejected:", data);
+
+            if (isComponentMounted.current) {
+                window.dispatchEvent(new CustomEvent('callRejected', {
+                    detail: {
+                        sessionId: data.videoCallSessionId,
+                        callerName: data.callerName
+                    }
+                }));
+
+                toast.info("❌ Cuộc gọi bị từ chối", {
+                    description: "Cuộc gọi đã kết thúc",
+                    duration: 3000,
+                });
+            }
+        });
+
+        hubConnection.on("CallEnded", (data: any) => {
+            console.log("[ChatHub] Call ended:", data);
+
+            if (isComponentMounted.current) {
+                window.dispatchEvent(new CustomEvent('callEnded', {
+                    detail: {
+                        sessionId: data.videoCallSessionId,
+                        callerName: data.callerName
+                    }
+                }));
+
+                toast.info("🔚 Cuộc gọi kết thúc", {
+                    description: "Phiên video call đã kết thúc",
+                    duration: 3000,
+                });
+            }
+        });
+
         // Connection events
         hubConnection.onclose((error) => {
             if (isComponentMounted.current) {
