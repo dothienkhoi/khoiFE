@@ -62,8 +62,8 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
             return;
         }
 
-        if (name.trim().length > 50) {
-            toast.error("Tên nhóm không được vượt quá 50 ký tự");
+        if (name.trim().length > 20) {
+            toast.error("Tên nhóm không được vượt quá 20 ký tự");
             return;
         }
 
@@ -113,7 +113,7 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
 
                 // Delay để user thấy success message
                 setTimeout(() => {
-                    onGroupCreated(response);
+                    onGroupCreated(response.data);
 
                     // Reset form
                     setName("");
@@ -255,11 +255,11 @@ export function CreateGroupDialog({ open, onOpenChange, onGroupCreated }: Create
                                         onChange={(e) => setName(e.target.value)}
                                         placeholder="Nhập tên nhóm..."
                                         required
-                                        maxLength={50}
+                                        maxLength={20}
                                         className="transition-all duration-200 focus:ring-2 focus:ring-[#ad46ff]/20 focus:border-[#ad46ff]"
                                     />
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {name.length}/50 ký tự
+                                        {name.length}/20 ký tự
                                     </p>
                                 </div>
                             </div>

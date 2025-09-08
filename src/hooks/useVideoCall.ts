@@ -27,7 +27,7 @@ export interface VideoCallActions {
     rejectCall: () => void
     closeModals: () => void
     // Thêm các action mới
-    onCallAccepted: (token: string, serverUrl: string) => void
+    onCallAccepted: () => void
     onCallRejected: () => void
     onCallEnded: () => void
     retryOutgoingCall: () => void
@@ -52,20 +52,62 @@ export const useVideoCall = (): [VideoCallState, VideoCallActions] => {
     })
 
     // Callback functions
-    const onCallAccepted = useCallback(() => {
+    const onCallAccepted = useCallback(async () => {
         console.log('✅ Call accepted callback')
-        // TODO: Xử lý khi cuộc gọi được chấp nhận
-        // Ví dụ: Chuyển đến LiveKit client
-    }, [])
+
+        try {
+            if (state.sessionId) {
+                // Gọi API để lấy token cho người gọi
+                const response = await videoCallService.getCallerToken(state.sessionId)
+
+                if (response.success) {
+                    setState(prev => ({
+                        ...prev,
+                        livekitToken: response.data.livekitToken,
+                        livekitServerUrl: response.data.livekitServerUrl,
+                        isRinging: false,
+                        isConnecting: false,
+                        error: undefined
+                    }))
+
+                    console.log('✅ Caller token received successfully')
+                    // TODO: Chuyển đến LiveKit client với token
+                } else {
+                    throw new Error(response.message || 'Failed to get caller token')
+                }
+            }
+        } catch (error) {
+            console.error('Error getting caller token:', error)
+            setState(prev => ({
+                ...prev,
+                error: error instanceof Error ? error.message : 'Failed to get caller token',
+                isConnecting: false
+            }))
+        }
+    }, [state.sessionId])
 
     const onCallRejected = useCallback(() => {
         console.log('❌ Call rejected callback')
-        // TODO: Xử lý khi cuộc gọi bị từ chối
+
+        setState(prev => ({
+            ...prev,
+            isOutgoingCallOpen: false,
+            isRinging: false,
+            callDuration: 0,
+            error: 'Cuộc gọi bị từ chối'
+        }))
     }, [])
 
     const onCallEnded = useCallback(() => {
         console.log('🔚 Call ended callback')
-        // TODO: Xử lý khi cuộc gọi kết thúc
+
+        setState(prev => ({
+            ...prev,
+            isOutgoingCallOpen: false,
+            isRinging: false,
+            callDuration: 0,
+            error: 'Cuộc gọi đã kết thúc'
+        }))
     }, [])
 
     // Auto-close timer effect

@@ -14,6 +14,9 @@ export function VideoCallDialogs() {
         callerAvatar,
         conversationId,
         sessionId,
+        isRinging,
+        isConnecting,
+        error,
         startOutgoingCall,
         startIncomingCall,
         cancelCall,
@@ -60,6 +63,9 @@ export function VideoCallDialogs() {
                 recipientName={recipientName}
                 recipientAvatar={recipientAvatar}
                 conversationId={conversationId || 0}
+                isRinging={isRinging}
+                isConnecting={isConnecting}
+                error={error}
                 onCallAccepted={handleOutgoingCallAccepted}
                 onCallRejected={handleOutgoingCallRejected}
                 onCallEnded={handleOutgoingCallEnded}

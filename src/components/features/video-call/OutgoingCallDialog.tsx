@@ -13,6 +13,9 @@ interface OutgoingCallDialogProps {
     recipientName: string;
     recipientAvatar?: string;
     conversationId: number;
+    isRinging?: boolean;
+    isConnecting?: boolean;
+    error?: string;
     onCallAccepted?: () => void;
     onCallRejected?: () => void;
     onCallEnded?: () => void;
@@ -24,15 +27,21 @@ export function OutgoingCallDialog({
     recipientName,
     recipientAvatar,
     conversationId,
+    isRinging: externalIsRinging = true,
+    isConnecting: externalIsConnecting = false,
+    error: externalError,
     onCallAccepted,
     onCallRejected,
     onCallEnded
 }: OutgoingCallDialogProps) {
     const [callDuration, setCallDuration] = useState(0);
-    const [isRinging, setIsRinging] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoOff, setIsVideoOff] = useState(false);
-    const [callStatus, setCallStatus] = useState<'ringing' | 'connecting' | 'connected' | 'ended'>('ringing');
+
+    // Determine call status based on external props
+    const callStatus = externalError ? 'ended' :
+        externalIsConnecting ? 'connecting' :
+            externalIsRinging ? 'ringing' : 'connected';
 
     // Timer for call duration
     useEffect(() => {
@@ -57,8 +66,6 @@ export function OutgoingCallDialog({
     };
 
     const handleEndCall = () => {
-        setCallStatus('ended');
-        setIsRinging(false);
         onCallEnded?.();
         setTimeout(() => {
             onClose();
@@ -66,14 +73,10 @@ export function OutgoingCallDialog({
     };
 
     const handleCallAccepted = () => {
-        setCallStatus('connected');
-        setIsRinging(false);
         onCallAccepted?.();
     };
 
     const handleCallRejected = () => {
-        setCallStatus('ended');
-        setIsRinging(false);
         onCallRejected?.();
         setTimeout(() => {
             onClose();
@@ -106,7 +109,7 @@ export function OutgoingCallDialog({
                         </h3>
 
                         <div className="flex items-center justify-center space-x-2">
-                            {isRinging && (
+                            {externalIsRinging && (
                                 <div className="flex space-x-1">
                                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
@@ -118,7 +121,7 @@ export function OutgoingCallDialog({
                                 {callStatus === 'ringing' && 'Đang gọi...'}
                                 {callStatus === 'connecting' && 'Đang kết nối...'}
                                 {callStatus === 'connected' && formatDuration(callDuration)}
-                                {callStatus === 'ended' && 'Cuộc gọi kết thúc'}
+                                {callStatus === 'ended' && (externalError || 'Cuộc gọi kết thúc')}
                             </span>
                         </div>
                     </div>

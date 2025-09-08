@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { MessageCircle, Search, Phone, Video, Users, Settings, Lock, Globe } from "lucide-react";
+import { MessageCircle, Search, Phone, Video, Users, Settings, Lock, Globe, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { WelcomeScreen } from "../welcome/WelcomeScreen";
 import { useChatHub } from "@/components/providers/ChatHubProvider";
 import { getMessagePreview } from "@/lib/utils/messageUtils";
+import { QuickGroupDialog } from "./QuickGroupDialog";
 
 interface GroupChatInterfaceProps {
     groupId?: string;
@@ -35,6 +36,8 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
 
     const [isUploading, setIsUploading] = useState(false);
     const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
 
     const actualConversationId = conversationId || (groupId ? Number(groupId) : null);
 
@@ -212,87 +215,102 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
     const TypeIcon = groupTypeInfo.icon;
 
     return (
-        <div className="flex-1 flex flex-col h-full">
-            {/* Group Chat Header */}
-            <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                            <AvatarImage src={groupAvatar} />
-                            <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-semibold">
-                                {groupName.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <h2 className="font-semibold text-gray-900 dark:text-white">{groupName}</h2>
-                                <Badge
-                                    variant="secondary"
-                                    className={cn(
-                                        "text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1",
-                                        groupTypeInfo.bgColor,
-                                        groupTypeInfo.textColor
-                                    )}
-                                >
-                                    <TypeIcon className="w-3 h-3" />
-                                    {groupTypeInfo.label}
-                                </Badge>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                                <span className="flex items-center gap-1">
-                                    <Users className="w-3 h-3" />
-                                    {memberCount || 1} thành viên
-                                </span>
-                                <span>•</span>
-                                <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                                    {description || getDefaultDescription(groupType, groupName)}
-                                </span>
+        <>
+            <div className="flex-1 flex flex-col h-full">
+                {/* Group Chat Header */}
+                <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                                <AvatarImage src={groupAvatar} />
+                                <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-semibold">
+                                    {groupName.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h2 className="font-semibold text-gray-900 dark:text-white">{groupName}</h2>
+                                    <Badge
+                                        variant="secondary"
+                                        className={cn(
+                                            "text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1",
+                                            groupTypeInfo.bgColor,
+                                            groupTypeInfo.textColor
+                                        )}
+                                    >
+                                        <TypeIcon className="w-3 h-3" />
+                                        {groupTypeInfo.label}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                    <span className="flex items-center gap-1">
+                                        <Users className="w-3 h-3" />
+                                        {memberCount || 1} thành viên
+                                    </span>
+                                    <span>•</span>
+                                    <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                                        {description || getDefaultDescription(groupType, groupName)}
+                                    </span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                            <Search className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                            <Phone className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                            <Video className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                            <Users className="h-4 w-4" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                            <Settings className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                <Search className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                <Phone className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                <Video className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
+                                <Users className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsInfoOpen(true)} title="Thông tin nhóm">
+                                <Info className="h-4 w-4" />
+                            </Button>
+                            {/* Settings removed */}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-hidden min-h-0">
-                <MessageList
-                    conversationId={actualConversationId!}
-                    partnerName={groupName}
-                    partnerAvatar={groupAvatar}
-                    onReplyToMessage={setReplyToMessage}
-                    chatType="group"
-                />
-            </div>
+                {/* Messages */}
+                <div className="flex-1 overflow-hidden min-h-0">
+                    <MessageList
+                        conversationId={actualConversationId!}
+                        partnerName={groupName}
+                        partnerAvatar={groupAvatar}
+                        onReplyToMessage={setReplyToMessage}
+                        chatType="group"
+                    />
+                </div>
 
-            {/* Message input */}
-            <div>
-                <ChatInput
-                    onSendMessage={handleMessageInput}
-                    conversationId={actualConversationId!}
-                    disabled={isUploading}
-                    placeholder="Nhập tin nhắn..."
-                    replyTo={replyToMessage}
-                    onCancelReply={() => setReplyToMessage(null)}
-                />
+                {/* Message input */}
+                <div>
+                    <ChatInput
+                        onSendMessage={handleMessageInput}
+                        conversationId={actualConversationId!}
+                        disabled={isUploading}
+                        placeholder="Nhập tin nhắn..."
+                        replyTo={replyToMessage}
+                        onCancelReply={() => setReplyToMessage(null)}
+                    />
+                </div>
             </div>
-        </div>
+            <QuickGroupDialog
+                open={isInfoOpen}
+                onOpenChange={setIsInfoOpen}
+                group={{
+                    groupId: groupId!,
+                    groupName: groupName || "Nhóm",
+                    description: description,
+                    avatarUrl: groupAvatar,
+                    groupType: groupType,
+                    memberCount: memberCount
+                }}
+            />
+        </>
     );
 }

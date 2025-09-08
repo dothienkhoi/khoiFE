@@ -163,6 +163,25 @@ class VideoCallService {
     }
 
     /**
+     * Lấy token LiveKit cho người gọi sau khi cuộc gọi được chấp nhận
+     */
+    async getCallerToken(sessionId: string): Promise<VideoCallResponse> {
+        console.log('🎫 Getting caller token for session:', sessionId)
+
+        // Validate sessionId
+        if (!sessionId) {
+            throw new Error('Invalid session ID')
+        }
+
+        return this.makeRequest<VideoCallResponse>(
+            `/api/v1/video-calls/${sessionId}/token`,
+            {
+                method: 'GET',
+            }
+        )
+    }
+
+    /**
      * Kết thúc cuộc gọi video
      */
     async endVideoCall(sessionId: string): Promise<VideoCallResponse> {

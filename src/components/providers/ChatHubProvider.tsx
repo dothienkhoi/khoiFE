@@ -37,7 +37,7 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const { user, accessToken } = useAuthStore();
+    const { user, accessToken, isAuthenticated } = useAuthStore();
     const { addMessage, updateMessage, updateConversation } = useCustomerStore();
     const isComponentMounted = useRef(true);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -158,6 +158,16 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
             toast.error("Không thể thêm reaction");
         });
 
+        // Messages marked as read event
+        hubConnection.on("MessagesMarkedAsRead", (conversationId: number, messageIds: string[]) => {
+            console.log("[ChatHub] Messages marked as read:", { conversationId, messageIds });
+
+            // Dispatch custom event for UI updates
+            window.dispatchEvent(new CustomEvent('messagesMarkedAsRead', {
+                detail: { conversationId, messageIds }
+            }));
+        });
+
         // Video Call Events
         hubConnection.on("IncomingCall", (data: any) => {
             console.log("[ChatHub] Incoming call received:", data);
@@ -268,7 +278,10 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
     };
 
     const connect = async () => {
-        if (isConnecting || isConnected || !user || !accessToken) return;
+        // Kiểm tra điều kiện đăng nhập đầy đủ
+        if (isConnecting || isConnected || !isAuthenticated || !user || !accessToken || !user.id) {
+            return;
+        }
 
         try {
             setIsConnecting(true);
@@ -384,8 +397,12 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         isComponentMounted.current = true;
 
-        if (user && accessToken) {
+        // Chỉ kết nối khi user đã đăng nhập hoàn toàn
+        if (isAuthenticated && user && accessToken && user.id) {
             connect();
+        } else {
+            // Ngắt kết nối nếu user chưa đăng nhập
+            disconnect();
         }
 
         return () => {
@@ -397,7 +414,7 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
 
             disconnect();
         };
-    }, [user, accessToken]);
+    }, [isAuthenticated, user, accessToken]);
 
     const value: ChatHubContextType = {
         connection,

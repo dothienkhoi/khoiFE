@@ -74,6 +74,7 @@ interface CustomerState {
     updateMessage: (conversationId: number, messageId: string, updates: Partial<Message>) => void;
     removeMessage: (conversationId: number, messageId: string) => void;
     clearMessages: (conversationId: number) => void;
+    markMessagesAsRead: (conversationId: number, messageIds: string[]) => void;
 
     // Posts
     setPosts: (posts: Post[]) => void;
@@ -258,6 +259,14 @@ export const useCustomerStore = create<CustomerState>()(
             })),
             clearMessages: (conversationId) => set((state) => ({
                 messages: { ...state.messages, [conversationId]: [] }
+            })),
+            markMessagesAsRead: (conversationId, messageIds) => set((state) => ({
+                messages: {
+                    ...state.messages,
+                    [conversationId]: (state.messages[conversationId] || []).map(message =>
+                        messageIds.includes(message.id) ? { ...message, isRead: true } : message
+                    )
+                }
             })),
 
             // Posts actions

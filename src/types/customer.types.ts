@@ -324,6 +324,7 @@ export interface Message {
     messageType: 'Text' | 'Image' | 'File' | 'System' | 'Poll';
     sentAt: string;
     isDeleted: boolean;
+    isRead?: boolean;
     attachments: MessageAttachment[];
     reactions: MessageReaction[];
     parentMessageId: string | null;

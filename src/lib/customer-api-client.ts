@@ -274,40 +274,31 @@ export const uploadFilesToGroup = async (conversationId: number, files: File[]) 
 // GROUPS API FUNCTIONS
 // ===============================
 
-export const getMyGroups = async () => {
+export const getMyGroups = async (pageNumber: number = 1, pageSize: number = 20) => {
     const response = await customerApiClient.get<CustomerApiResponse<{
         items: Array<{
             groupId: string;
             groupName: string;
             description: string;
             avatarUrl: string | null;
+            groupType?: string;
+            memberCount?: number;
+            defaultConversationId?: number;
+            createdAt?: string;
+            createdByUserId?: string;
         }>;
         pageNumber: number;
         pageSize: number;
         totalRecords: number;
         totalPages: number;
     }>>(
-        "/me/groups"
+        `/me/groups?pageNumber=${pageNumber}&pageSize=${pageSize}&sortBy=createdAt&sortOrder=desc`
     );
+
     return response.data;
 };
 
-export const createGroupInviteLink = async (groupId: string, options?: {
-    expiresInHours?: number;
-    maxUses?: number;
-}) => {
-    const response = await customerApiClient.post<CustomerApiResponse<{
-        invitationCode: string;
-        fullUrl: string;
-    }>>(
-        `/groups/${groupId}/invite-links`,
-        {
-            expiresInHours: options?.expiresInHours || 0,
-            maxUses: options?.maxUses || 0
-        }
-    );
-    return response.data;
-};
+// removed duplicate legacy createGroupInviteLink (consolidated below)
 
 // Lấy thông tin xem trước của nhóm từ mã mời
 export const getGroupPreviewByInviteCode = async (invitationCode: string) => {
@@ -590,6 +581,44 @@ export const getGroupDetails = async (groupId: string) => {
 export const getGroupMembers = async (groupId: string) => {
     const response = await customerApiClient.get<CustomerApiResponse<GroupMember[]>>(
         `/groups/${groupId}/members`
+    );
+    return response.data;
+};
+
+// Public groups listing (searchable, paginated)
+export const getPublicGroups = async (pageNumber: number = 1, pageSize: number = 20, searchTerm?: string) => {
+    const params = new URLSearchParams();
+    params.append("pageNumber", String(pageNumber));
+    params.append("pageSize", String(pageSize));
+    if (searchTerm && searchTerm.trim()) params.append("searchTerm", searchTerm.trim());
+    const response = await customerApiClient.get<CustomerApiResponse<{
+        items: Array<{ groupId: string; groupName: string; description: string; groupAvatarUrl?: string | null; memberCount?: number }>;
+        pageNumber: number; totalPages: number; totalRecords: number;
+    }>>(`/groups/public?${params.toString()}`);
+    return response.data;
+};
+
+// My groups (created or joined) - paginated
+export const getMyGroupsPaged = async (pageNumber: number = 1, pageSize: number = 20, searchTerm?: string) => {
+    const params = new URLSearchParams();
+    params.append("pageNumber", String(pageNumber));
+    params.append("pageSize", String(pageSize));
+    if (searchTerm && searchTerm.trim()) params.append("searchTerm", searchTerm.trim());
+    const response = await customerApiClient.get<CustomerApiResponse<{
+        items: Array<{ conversationId: number; groupId: string; groupType?: string; groupName: string; description?: string; avatarUrl?: string | null }>;
+        pageNumber: number; pageSize: number; totalRecords: number; totalPages: number;
+    }>>(`/me/groups?${params.toString()}`);
+    return response.data;
+};
+
+// Create invite link for a group with configurable expiry and max uses
+export const createGroupInviteLink = async (
+    groupId: string,
+    body: { expiresInHours: number; maxUses: number }
+) => {
+    const response = await customerApiClient.post<CustomerApiResponse<{ invitationCode: string; fullUrl: string }>>(
+        `/groups/${groupId}/invite-links`,
+        body
     );
     return response.data;
 };
@@ -1172,14 +1201,46 @@ export const getMessageHistory = async (
         const response = await customerApiClient.get<CustomerApiResponse<MessageHistoryResponse>>(
             `/conversations/${conversationId}/messages?${params.toString()}`
         );
+
         return response.data;
     } catch (error: any) {
-        console.error('[API] Error getting message history:', error);
+        // Handle specific error cases
+        if (error.response?.status === 403) {
+            return {
+                success: false,
+                message: `Bạn không có quyền truy cập cuộc hội thoại này (ID: ${conversationId})`,
+                data: {
+                    messages: [],
+                    hasMore: false,
+                    nextCursor: null
+                }
+            };
+        } else if (error.response?.status === 404) {
+            return {
+                success: false,
+                message: `Cuộc hội thoại không tồn tại (ID: ${conversationId})`,
+                data: {
+                    messages: [],
+                    hasMore: false,
+                    nextCursor: null
+                }
+            };
+        } else if (error.response?.status === 401) {
+            return {
+                success: false,
+                message: 'Bạn cần đăng nhập để xem tin nhắn',
+                data: {
+                    messages: [],
+                    hasMore: false,
+                    nextCursor: null
+                }
+            };
+        }
 
-        // Return a safe fallback response
+        // Return a safe fallback response for other errors
         return {
             success: false,
-            message: error.response?.data?.message || error.message || 'Failed to load messages',
+            message: error.response?.data?.message || error.message || 'Không thể tải tin nhắn',
             data: {
                 messages: [],
                 hasMore: false,

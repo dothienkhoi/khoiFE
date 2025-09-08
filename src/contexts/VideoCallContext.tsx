@@ -28,6 +28,9 @@ interface VideoCallContextType {
     rejectCall: () => void
     closeModals: () => void
     retryOutgoingCall: () => void
+    onCallAccepted: () => void
+    onCallRejected: () => void
+    onCallEnded: () => void
 
     // Real-time handlers
     handleIncomingCallNotification: (data: IncomingCallData) => void
@@ -78,25 +81,36 @@ export const VideoCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // Listen for call accepted notifications
         const handleCallAccepted = (event: CustomEvent) => {
-            const { sessionId } = event.detail;
-            // Handle call accepted logic
+            const { sessionId, callerName } = event.detail;
             console.log("Call accepted:", sessionId);
+
+            // Nếu đây là outgoing call và được accept
+            if (videoCallState.isOutgoingCallOpen && videoCallState.sessionId === sessionId) {
+                // Gọi API để lấy token cho người gọi
+                videoCallActions.onCallAccepted();
+            }
         };
 
         // Listen for call rejected notifications
         const handleCallRejected = (event: CustomEvent) => {
-            const { sessionId } = event.detail;
-            // Handle call rejected logic
+            const { sessionId, callerName } = event.detail;
             console.log("Call rejected:", sessionId);
-            videoCallActions.cancelCall();
+
+            // Nếu đây là outgoing call và bị reject
+            if (videoCallState.isOutgoingCallOpen && videoCallState.sessionId === sessionId) {
+                videoCallActions.onCallRejected();
+            }
         };
 
         // Listen for call ended notifications
         const handleCallEnded = (event: CustomEvent) => {
-            const { sessionId } = event.detail;
-            // Handle call ended logic
+            const { sessionId, callerName } = event.detail;
             console.log("Call ended:", sessionId);
-            videoCallActions.cancelCall();
+
+            // Nếu đây là outgoing call và bị end
+            if (videoCallState.isOutgoingCallOpen && videoCallState.sessionId === sessionId) {
+                videoCallActions.onCallEnded();
+            }
         };
 
         // Add event listeners
@@ -112,7 +126,7 @@ export const VideoCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             window.removeEventListener('callRejected', handleCallRejected as EventListener);
             window.removeEventListener('callEnded', handleCallEnded as EventListener);
         };
-    }, [handleIncomingCallNotification, videoCallActions])
+    }, [handleIncomingCallNotification, videoCallActions, videoCallState.isOutgoingCallOpen, videoCallState.sessionId])
 
     const contextValue: VideoCallContextType = {
         // State

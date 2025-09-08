@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Search, Plus, Users } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Search, Plus, Users, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { getGroupConversations, getGroups } from "@/lib/customer-api-client";
+import { getMyGroupsPaged } from "@/lib/customer-api-client";
 import { safeToLowerCase } from "@/lib/utils";
-import { getMessagePreview } from "@/lib/utils/messageUtils";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { GroupItem } from "./GroupItem";
 
@@ -20,7 +19,7 @@ interface Group {
     unreadCount?: number;
     groupType?: "Public" | "Private" | "Community";
     memberCount?: number;
-    conversationId?: number; // Add conversationId for API calls
+    conversationId?: number;
 }
 
 interface GroupSidebarProps {
@@ -31,40 +30,97 @@ interface GroupSidebarProps {
 export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+    // Client-side pagination after fetching conversations
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMorePages, setHasMorePages] = useState(true);
+    const [totalRecords, setTotalRecords] = useState(0);
+    const pageSize = 20;
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-
-
-    // Fetch groups and conversations on component mount
-    useEffect(() => {
-        const fetchGroups = async () => {
-            try {
+    // Fetch my groups using /api/v1/me/groups (paged)
+    const fetchGroups = useCallback(async (page: number = 1, append: boolean = false) => {
+        try {
+            if (page === 1) {
                 setIsLoading(true);
-
-                // Fetch both groups and conversations
-                const [groupsResponse, conversationsResponse] = await Promise.all([
-                    getGroups(),
-                    getGroupConversations()
-                ]);
-
-                // Process and merge data
-                const mergedGroups = mergeGroupsAndConversations(
-                    groupsResponse.success ? groupsResponse.data?.items || [] : [],
-                    conversationsResponse.success ? conversationsResponse.data || [] : []
-                );
-
-                setGroups(mergedGroups);
-            } catch (error) {
-                console.error("Error fetching groups and conversations:", error);
-                setGroups([]);
-            } finally {
-                setIsLoading(false);
+            } else {
+                setIsLoadingMore(true);
             }
+
+            const res = await getMyGroupsPaged(page, pageSize, searchTerm);
+            if (res.success && res.data) {
+                const items = res.data.items || [];
+                const mapped: Group[] = items.map((g: any) => ({
+                    groupId: g.groupId,
+                    groupName: g.groupName,
+                    description: g.description || "",
+                    avatarUrl: g.avatarUrl || null,
+                    lastMessagePreview: "",
+                    lastMessageTimestamp: undefined,
+                    unreadCount: 0,
+                    groupType: (g.groupType?.toLowerCase() === "private" ? "Private" : "Public"),
+                    memberCount: undefined,
+                    conversationId: g.conversationId
+                }));
+                if (append) setGroups(prev => [...prev, ...mapped]); else setGroups(mapped);
+                setTotalRecords(res.data.totalRecords || mapped.length);
+                setHasMorePages((res.data.pageNumber || page) < (res.data.totalPages || 1));
+                setCurrentPage(res.data.pageNumber || page);
+            } else {
+                if (!append) setGroups([]);
+            }
+        } catch (error) {
+            if (!append) {
+                setGroups([]);
+            }
+        } finally {
+            setIsLoading(false);
+            setIsLoadingMore(false);
+        }
+    }, [pageSize]);
+
+    // Function to manually add new group to top of list
+    const addNewGroupToTop = useCallback((newGroup: any) => {
+        const transformedGroup: Group = {
+            groupId: newGroup.groupId,
+            groupName: newGroup.groupName,
+            description: newGroup.description || "",
+            avatarUrl: newGroup.groupAvatarUrl || null,
+            lastMessagePreview: newGroup.description || "",
+            lastMessageTimestamp: undefined,
+            unreadCount: 0,
+            groupType: newGroup.groupType || "Public",
+            memberCount: 1,
+            conversationId: newGroup.defaultConversationId || parseInt(newGroup.groupId)
         };
 
-        fetchGroups();
+        setGroups(prev => [transformedGroup, ...prev]);
+        setTotalRecords(prev => prev + 1);
     }, []);
+
+    // Load more groups when scrolling to bottom
+    const loadMoreGroups = useCallback(() => {
+        if (!isLoadingMore && hasMorePages) {
+            fetchGroups(currentPage + 1, true);
+        }
+    }, [currentPage, hasMorePages, isLoadingMore, fetchGroups]);
+
+    // Handle scroll for infinite loading
+    const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        const isNearBottom = scrollTop + clientHeight >= scrollHeight - 100;
+
+        if (isNearBottom && hasMorePages && !isLoadingMore) {
+            loadMoreGroups();
+        }
+    }, [hasMorePages, isLoadingMore, loadMoreGroups]);
+
+    // Initial load
+    useEffect(() => {
+        fetchGroups(1, false);
+    }, [fetchGroups]);
 
     // Listen for real-time message updates (only update unread count, keep description)
     useEffect(() => {
@@ -79,7 +135,6 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                             return {
                                 ...group,
                                 unreadCount: (group.unreadCount || 0) + 1
-                                // Keep description, don't update lastMessagePreview
                             };
                         }
                         return group;
@@ -137,133 +192,21 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
         }
     };
 
-    // Helper function to merge groups and conversations data
-    const mergeGroupsAndConversations = (groupsData: any[], conversationsData: any[]) => {
-        // Create a map of conversations by conversationId for quick lookup
-        const conversationsMap = new Map();
-        conversationsData.forEach(conversation => {
-            if (conversation && conversation.conversationId && conversation.conversationType === "Group") {
-                conversationsMap.set(conversation.conversationId, conversation);
-            }
-        });
-
-        // Create a map to track which conversations have been assigned
-        const assignedConversations = new Set();
-
-        // Process groups and merge with conversation data
-        const mergedGroups = groupsData
-            .filter(group => group && typeof group === 'object' && group.groupId && group.groupName)
-            .map(group => {
-                // Try to find matching conversation by defaultConversationId or groupId
-                let conversation = null;
-
-                // First try to find by defaultConversationId if available
-                if (group.defaultConversationId) {
-                    conversation = conversationsMap.get(group.defaultConversationId);
-                    if (conversation) {
-                        assignedConversations.add(conversation.conversationId);
-                    }
-                }
-
-                // If not found, try to find by groupId pattern
-                if (!conversation) {
-                    // Look for conversation that might match this group
-                    for (const [convId, conv] of conversationsMap.entries()) {
-                        // Skip if this conversation is already assigned
-                        if (assignedConversations.has(conv.conversationId)) {
-                            continue;
-                        }
-
-                        // Try to match by group name or other patterns
-                        if (conv.displayName === group.groupName ||
-                            conv.displayName.toLowerCase().includes(group.groupName.toLowerCase())) {
-                            conversation = conv;
-                            assignedConversations.add(conv.conversationId);
-                            break;
-                        }
-                    }
-                }
-
-                // If still not found, try to find any unassigned conversation
-                if (!conversation) {
-                    for (const [convId, conv] of conversationsMap.entries()) {
-                        if (!assignedConversations.has(conv.conversationId)) {
-                            conversation = conv;
-                            assignedConversations.add(conv.conversationId);
-                            break;
-                        }
-                    }
-                }
-
-                // If still not found, don't assign any conversation
-                if (!conversation) {
-                    console.warn(`No conversation found for group: ${group.groupName} (${group.groupId})`);
-                } else {
-                    // Mapped group to conversation
-                }
-
-                return {
-                    groupId: group.groupId,
-                    groupName: group.groupName,
-                    description: group.description || "",
-                    avatarUrl: group.groupAvatarUrl || group.avatarUrl || null,
-                    lastMessagePreview: group.description || "", // Remove "Chưa có tin nhắn nào"
-                    lastMessageTimestamp: conversation?.lastMessageTimestamp || null,
-                    unreadCount: conversation?.unreadCount || 0,
-                    groupType: group.groupType || undefined,
-                    memberCount: group.memberCount || 1, // Fix typo: groupMemberCount -> memberCount
-                    conversationId: conversation?.conversationId // Use conversationId from conversation
-                };
-            });
-
-        // If no groups found, fallback to conversations only
-        if (mergedGroups.length === 0) {
-            return conversationsData
-                .filter(conversation =>
-                    conversation &&
-                    conversation.conversationId &&
-                    conversation.conversationType === "Group"
-                )
-                .map(conversation => ({
-                    groupId: `conversation-${conversation.conversationId}`,
-                    groupName: conversation.displayName,
-                    description: "",
-                    avatarUrl: conversation.avatarUrl || null,
-                    lastMessagePreview: "", // Remove "Chưa có tin nhắn nào"
-                    lastMessageTimestamp: conversation.lastMessageTimestamp || null,
-                    unreadCount: conversation.unreadCount || 0,
-                    groupType: undefined,
-                    memberCount: 1,
-                    conversationId: conversation.conversationId
-                }));
-        }
-
-        return mergedGroups;
-    };
-
     // Add new group to the top of the list after creating
-    const handleGroupCreated = async (newGroupData?: any) => {
-        // Always refresh the entire list to get the latest data including avatar
-        try {
-            const [groupsResponse, conversationsResponse] = await Promise.all([
-                getGroups(),
-                getGroupConversations()
-            ]);
-
-            const mergedGroups = mergeGroupsAndConversations(
-                groupsResponse.success ? groupsResponse.data?.items || [] : [],
-                conversationsResponse.success ? conversationsResponse.data || [] : []
-            );
-            setGroups(mergedGroups);
-        } catch (error) {
-            console.error("Error refreshing groups and conversations:", error);
-            setGroups([]);
+    const handleGroupCreated = useCallback(async (newGroupData?: any) => {
+        // If we have new group data, add it to top immediately
+        if (newGroupData && newGroupData.groupId) {
+            addNewGroupToTop(newGroupData);
         }
-    };
 
+        // Also refresh the entire list to ensure consistency
+        setTimeout(async () => {
+            setCurrentPage(1);
+            setHasMorePages(true);
+            await fetchGroups(1, false);
+        }, 1000);
 
-
-
+    }, [fetchGroups, addNewGroupToTop]);
 
     return (
         <div className="flex flex-col h-full">
@@ -271,6 +214,7 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
             <div className="p-4 border-b border-gray-200 dark:border-gray-800 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold text-gray-900 dark:text-white">Trò chuyện nhóm</h2>
+
                 </div>
 
                 {/* Search Input with Action Button */}
@@ -298,7 +242,11 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
             </div>
 
             {/* Groups List */}
-            <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
+            <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-y-auto p-4 scrollbar-hide"
+                onScroll={handleScroll}
+            >
                 {isLoading ? (
                     <div className="flex flex-col items-center justify-center h-full text-center">
                         <div className="w-16 h-16 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-4 animate-pulse">
@@ -316,6 +264,23 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                                 onClick={() => group && handleGroupSelect(group)}
                             />
                         ))}
+
+                        {/* Loading more indicator */}
+                        {isLoadingMore && (
+                            <div className="flex items-center justify-center py-4">
+                                <Loader2 className="h-6 w-6 animate-spin text-[#ad46ff]" />
+                                <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
+                                    Đang tải thêm...
+                                </span>
+                            </div>
+                        )}
+
+                        {/* End of list indicator */}
+                        {!hasMorePages && filteredGroups.length > 0 && (
+                            <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
+                                Đã hiển thị tất cả nhóm ({totalRecords} nhóm)
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full text-center">
@@ -331,6 +296,15 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                                 : "Tạo nhóm mới hoặc tìm kiếm nhóm để tham gia"
                             }
                         </p>
+                        {!searchTerm && (
+                            <Button
+                                onClick={() => setIsCreateGroupOpen(true)}
+                                className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] hover:from-[#ad46ff]/90 hover:to-[#1447e6]/90 text-white"
+                            >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Tạo nhóm đầu tiên
+                            </Button>
+                        )}
                     </div>
                 )}
             </div>

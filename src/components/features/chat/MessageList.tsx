@@ -14,7 +14,9 @@ import { formatMessageTime } from "@/lib/dateUtils";
 import {
     Image as ImageIcon,
     File,
-    MessageCircle
+    MessageCircle,
+    Check,
+    CheckCheck
 } from "lucide-react";
 import { PollMessage } from "./PollMessage";
 import { ImageGallery } from "./ImageGallery";
@@ -31,7 +33,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ conversationId, partnerName, partnerAvatar, onReplyToMessage, chatType = 'direct' }: MessageListProps) {
-    const { messages, setMessages } = useCustomerStore();
+    const { messages, setMessages, markMessagesAsRead: markMessagesAsReadStore } = useCustomerStore();
     const { user: currentUser } = useAuthStore();
     const { joinConversation, leaveConversation, markMessagesAsRead } = useChatHub();
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -68,19 +70,43 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
     }, [conversationId, joinConversation, leaveConversation]);
 
 
+    // Mark messages as read when user views the conversation
     useEffect(() => {
-        if (conversationId && conversationMessages.length > 0) {
-
-            const otherUserMessages = conversationMessages.filter(msg =>
-                msg.sender.userId !== currentUser?.id
+        if (conversationId && conversationMessages.length > 0 && currentUser?.id) {
+            // Get unread messages from other users
+            const unreadMessages = conversationMessages.filter(msg =>
+                msg.sender.userId !== currentUser.id && !msg.isRead
             );
 
-            if (otherUserMessages.length > 0) {
-                const messageIds = otherUserMessages.map(msg => msg.id);
+            if (unreadMessages.length > 0) {
+                const messageIds = unreadMessages.map(msg => msg.id);
+
+                // Mark as read in local store immediately for UI feedback
+                markMessagesAsReadStore(conversationId, messageIds);
+
+                // Send to server via SignalR
                 markMessagesAsRead(conversationId, messageIds);
             }
         }
-    }, [conversationId, conversationMessages, currentUser?.id, markMessagesAsRead]);
+    }, [conversationId, conversationMessages, currentUser?.id, markMessagesAsRead, markMessagesAsReadStore]);
+
+    // Listen for messages marked as read event from server
+    useEffect(() => {
+        const handleMessagesMarkedAsRead = (event: CustomEvent) => {
+            const { conversationId: eventConversationId, messageIds } = event.detail;
+
+            if (eventConversationId === conversationId) {
+                // Update local store to reflect server confirmation
+                markMessagesAsReadStore(conversationId, messageIds);
+            }
+        };
+
+        window.addEventListener('messagesMarkedAsRead', handleMessagesMarkedAsRead as EventListener);
+
+        return () => {
+            window.removeEventListener('messagesMarkedAsRead', handleMessagesMarkedAsRead as EventListener);
+        };
+    }, [conversationId, markMessagesAsReadStore]);
 
 
     useEffect(() => {
@@ -163,6 +189,9 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
 
         if (beforeMessageId) {
             setIsLoadingMore(true);
+        } else {
+            // For initial load, we need to show loading state
+            setIsLoadingMore(true);
         }
 
         try {
@@ -200,9 +229,7 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
         } catch (error: any) {
             setHasMore(false);
         } finally {
-            if (beforeMessageId) {
-                setIsLoadingMore(false);
-            }
+            setIsLoadingMore(false);
         }
     };
 
@@ -249,6 +276,25 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
     const isImageUrl = useCallback((url: string): boolean => {
         return /(\.png|\.jpe?g|\.gif|\.bmp|\.webp|\.avif)(\?.*)?$/i.test(url);
     }, []);
+
+    // Render read status indicator for own messages
+    const renderReadStatus = useCallback((message: Message) => {
+        if (!isOwnMessage(message)) return null;
+
+        return (
+            <div className="flex items-center gap-1 mt-1">
+                {message.isRead ? (
+                    <div title="Đã đọc">
+                        <CheckCheck className="h-3 w-3 text-blue-500" />
+                    </div>
+                ) : (
+                    <div title="Đã gửi">
+                        <Check className="h-3 w-3 text-gray-400" />
+                    </div>
+                )}
+            </div>
+        );
+    }, [isOwnMessage]);
 
     // Render message content based on type
     const renderMessageContent = useCallback((message: Message) => {
@@ -355,7 +401,12 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                 }}
             >
                 <div className="space-y-4">
-                    {conversationMessages.length === 0 ? (
+                    {isLoadingMore && conversationMessages.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ad46ff] mb-4"></div>
+                            <p className="text-gray-600 dark:text-gray-400">Đang tải tin nhắn...</p>
+                        </div>
+                    ) : conversationMessages.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-gray-50 dark:bg-gray-900">
                             <div className="w-32 h-32 bg-gradient-to-r from-[#ad46ff]/10 to-[#1447e6]/10 rounded-full flex items-center justify-center mb-6">
                                 <MessageCircle className="w-16 h-16 text-[#ad46ff]" />
@@ -449,13 +500,14 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                                     />
                                                 </div>
 
-                                                {/* Timestamp inside container */}
+                                                {/* Timestamp and read status inside container */}
                                                 {message.sentAt && (
                                                     <div className={cn(
-                                                        "text-[11px] text-muted-foreground mt-1",
-                                                        own ? "text-right" : "text-left"
+                                                        "flex items-center gap-2 text-[11px] text-muted-foreground mt-1",
+                                                        own ? "justify-end" : "justify-start"
                                                     )}>
-                                                        {formatMessageTime(message.sentAt)}
+                                                        <span>{formatMessageTime(message.sentAt)}</span>
+                                                        {renderReadStatus(message)}
                                                     </div>
                                                 )}
 
@@ -495,13 +547,14 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
                                             </div>
                                         )}
 
-                                        {/* Timestamp below for normal messages */}
+                                        {/* Timestamp and read status below for normal messages */}
                                         {!message.parentMessage && message.sentAt && (
                                             <div className={cn(
-                                                "text-[11px] text-muted-foreground",
+                                                "flex items-center gap-2 text-[11px] text-muted-foreground",
                                                 own ? "self-end" : "self-start"
                                             )}>
-                                                {formatMessageTime(message.sentAt)}
+                                                <span>{formatMessageTime(message.sentAt)}</span>
+                                                {renderReadStatus(message)}
                                             </div>
                                         )}
 
