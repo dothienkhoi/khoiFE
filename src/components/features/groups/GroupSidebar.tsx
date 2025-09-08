@@ -61,7 +61,7 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                     lastMessageTimestamp: undefined,
                     unreadCount: 0,
                     groupType: (g.groupType?.toLowerCase() === "private" ? "Private" : "Public"),
-                    memberCount: undefined,
+                    memberCount: typeof g.memberCount === "number" ? g.memberCount : undefined,
                     conversationId: g.conversationId
                 }));
                 if (append) setGroups(prev => [...prev, ...mapped]); else setGroups(mapped);
@@ -296,15 +296,6 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                                 : "Tạo nhóm mới hoặc tìm kiếm nhóm để tham gia"
                             }
                         </p>
-                        {!searchTerm && (
-                            <Button
-                                onClick={() => setIsCreateGroupOpen(true)}
-                                className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] hover:from-[#ad46ff]/90 hover:to-[#1447e6]/90 text-white"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Tạo nhóm đầu tiên
-                            </Button>
-                        )}
                     </div>
                 )}
             </div>

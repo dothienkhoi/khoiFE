@@ -10,7 +10,6 @@ import { ChatInput } from "./ChatInput";
 import { Message } from "@/types/customer.types";
 import { sendConversationMessage } from "@/lib/customer-api-client";
 import { toast } from "sonner";
-import { WelcomeScreen } from "../welcome/WelcomeScreen";
 import { useChatHub } from "@/components/providers/ChatHubProvider";
 
 export function ChatInterface() {
@@ -128,17 +127,9 @@ export function ChatInterface() {
         }
     }, [handleSendText, handleSendFiles]);
 
-    // If no active chat, show welcome screen
+    // If no active chat, render an empty state (no welcome screen)
     if (!activeChatId || !activeChatType) {
-        return (
-            <WelcomeScreen
-                userName={currentUser?.fullName || "Người dùng"}
-                onNewChat={() => {
-                    // TODO: Implement new chat functionality
-                    console.log('New chat clicked');
-                }}
-            />
-        );
+        return <div className="flex-1" />;
     }
 
     return (

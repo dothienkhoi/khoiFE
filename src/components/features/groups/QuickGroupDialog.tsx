@@ -155,7 +155,7 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl h-[520px] p-0 bg-white dark:bg-gray-900">
+            <DialogContent className="max-w-6xl h-[640px] p-0 bg-white dark:bg-gray-900">
                 <div className="flex h-full">
                     {/* Left column - basic group info */}
                     <div className="w-1/3 p-6 border-r border-gray-200 dark:border-gray-800 bg-gradient-to-br from-[#ad46ff]/5 to-[#1447e6]/5">
@@ -207,99 +207,45 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
                                     </TabsList>
                                 </div>
 
-                                <div className="flex-1 overflow-y-auto">
+                                <div className="flex-1 overflow-y-hidden">
                                     <TabsContent value="members" className="h-full">
                                         {isLoadingMembers ? (
                                             <div className="flex items-center justify-center h-48 text-sm text-gray-600 dark:text-gray-400">Đang tải thành viên...</div>
                                         ) : members.length === 0 ? (
                                             <div className="flex items-center justify-center h-48 text-sm text-gray-600 dark:text-gray-400">Chưa có thành viên</div>
                                         ) : (
-                                            <div className="space-y-2">
-                                                {members.map(m => (
-                                                    <div key={m.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                        <div className="flex items-center gap-3">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={m.avatarUrl || ""} />
-                                                                <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white text-sm">
-                                                                    {m.displayName.charAt(0).toUpperCase()}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-sm font-medium text-gray-900 dark:text-white">{m.displayName}</span>
-                                                                <span className="text-xs text-gray-500 dark:text-gray-400">{m.role === "Admin" ? "Quản trị viên" : "Thành viên"}</span>
+                                            // Members list (scrollable to avoid breaking layout)
+                                            <div className="space-y-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/40 dark:bg-gray-800/40 p-2">
+                                                {[...members]
+                                                    .sort((a, b) => {
+                                                        const aw = a.role === "Admin" ? 0 : 1;
+                                                        const bw = b.role === "Admin" ? 0 : 1;
+                                                        if (aw !== bw) return aw - bw; // Admins first
+                                                        return (a.displayName || "").localeCompare(b.displayName || "");
+                                                    })
+                                                    .map(m => (
+                                                        <div key={m.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                                            <div className="flex items-center gap-3">
+                                                                <Avatar className="h-8 w-8">
+                                                                    <AvatarImage src={m.avatarUrl || ""} />
+                                                                    <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white text-sm">
+                                                                        {m.displayName.charAt(0).toUpperCase()}
+                                                                    </AvatarFallback>
+                                                                </Avatar>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-sm font-medium text-gray-900 dark:text-white">{m.displayName}</span>
+                                                                    <span className="text-xs text-gray-500 dark:text-gray-400">{m.role === "Admin" ? "Quản trị viên" : "Thành viên"}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    ))}
                                             </div>
                                         )}
                                     </TabsContent>
                                     <TabsContent value="invite" className="h-full">
                                         <div className="space-y-6">
-                                            <div>
-                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tìm người dùng theo tên hoặc email</label>
-                                                <div className="mt-2 flex gap-2 items-stretch">
-                                                    <input
-                                                        value={searchTerm}
-                                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                                        placeholder="Nhập tên hoặc email..."
-                                                        className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                                    />
-                                                    {/* Nút tìm kiếm giữ lại để người dùng bấm thủ công nếu muốn */}
-                                                    <button
-                                                        onClick={() => setSearchTerm((s) => s)}
-                                                        disabled={!searchTerm.trim() || isSearching}
-                                                        className="rounded-md bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white text-sm px-4 py-2 disabled:opacity-60"
-                                                    >
-                                                        {isSearching ? "Đang tìm..." : "Tìm kiếm"}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                {(!searchTerm.trim() || searchTerm.trim().length < 2) && !isSearching && candidates.length === 0 && (
-                                                    <div className="text-sm text-gray-500 dark:text-gray-400">Nhập từ khóa để tìm người dùng.</div>
-                                                )}
-
-                                                {searchTerm.trim().length >= 2 && !isSearching && candidates.length === 0 && (
-                                                    <div className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy người dùng.</div>
-                                                )}
-
-                                                {candidates.map((u) => (
-                                                    <div key={u.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                        <div className="flex items-center gap-3">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={u.avatarUrl || ""} />
-                                                                <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white text-sm">
-                                                                    {u.fullName?.charAt(0)?.toUpperCase()}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-sm font-medium text-gray-900 dark:text-white">{u.fullName}</span>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                            disabled={!!invitingUserId || !/^[0-9a-fA-F-]{36}$/.test(group?.groupId || "")}
-                                                            onClick={async () => {
-                                                                if (!group?.groupId || !/^[0-9a-fA-F-]{36}$/.test(group.groupId)) return;
-                                                                setInvitingUserId(u.userId);
-                                                                try {
-                                                                    await inviteUserToGroup(group.groupId, [u.userId]);
-                                                                    setCandidates(prev => prev.filter(c => c.userId !== u.userId));
-                                                                } finally {
-                                                                    setInvitingUserId(null);
-                                                                }
-                                                            }}
-                                                        >
-                                                            {invitingUserId === u.userId ? "Đang mời..." : "Mời"}
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-
-                                            {/* Invite link generator */}
-                                            <div className="mt-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                                            {/* Invite link generator - moved to the top */}
+                                            <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
                                                 <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Tạo liên kết mời</h4>
                                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                                     <div>
@@ -332,9 +278,13 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
                                                             setIsGenerating(true);
                                                             try {
                                                                 const res = await createGroupInviteLink(group.groupId, { expiresInHours, maxUses });
-                                                                if (res.success && res.data?.fullUrl) {
-                                                                    setGeneratedLink(res.data.fullUrl);
-                                                                    await navigator.clipboard.writeText(res.data.fullUrl);
+                                                                if (res.success && res.data) {
+                                                                    const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                                                                    const displayUrl = res.data.invitationCode
+                                                                        ? `${appOrigin}/invite/${res.data.invitationCode}`
+                                                                        : (res.data.fullUrl || '').replace(/https?:\/\/localhost:\d+/i, appOrigin);
+                                                                    setGeneratedLink(displayUrl);
+                                                                    if (displayUrl) await navigator.clipboard.writeText(displayUrl);
                                                                 }
                                                             } finally {
                                                                 setIsGenerating(false);
@@ -343,15 +293,76 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
                                                     >
                                                         {isGenerating ? "Đang tạo..." : "Tạo liên kết"}
                                                     </button>
-                                                    {generatedLink && (
-                                                        <input
-                                                            value={generatedLink}
-                                                            readOnly
-                                                            className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
-                                                        />
+                                                    <input
+                                                        value={generatedLink}
+                                                        placeholder="Tạo liên kết mời bạn bè"
+                                                        readOnly
+                                                        className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tìm người dùng theo tên hoặc email</label>
+                                                <div className="mt-2 relative flex gap-2 items-stretch">
+                                                    <input
+                                                        value={searchTerm}
+                                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                                        placeholder="Nhập tên hoặc email..."
+                                                        className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm"
+                                                    />
+                                                    {/* Nút tìm kiếm giữ lại để người dùng bấm thủ công nếu muốn */}
+                                                    <button
+                                                        onClick={() => setSearchTerm((s) => s)}
+                                                        disabled={!searchTerm.trim() || isSearching}
+                                                        className="rounded-md bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white text-sm px-4 py-2 disabled:opacity-60"
+                                                    >
+                                                        {isSearching ? "Đang tìm..." : "Tìm kiếm"}
+                                                    </button>
+                                                    {searchTerm.trim().length >= 2 && candidates.length > 0 && (
+                                                        <div className="absolute left-0 right-0 top-full mt-2 z-30 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-xl max-h-64 overflow-y-auto">
+                                                            {candidates.map((u) => (
+                                                                <div key={u.userId} className="flex items-center justify-between gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                        <Avatar className="h-7 w-7">
+                                                                            <AvatarImage src={u.avatarUrl || ""} />
+                                                                            <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white text-xs">
+                                                                                {u.fullName?.charAt(0)?.toUpperCase()}
+                                                                            </AvatarFallback>
+                                                                        </Avatar>
+                                                                        <span className="text-sm text-gray-900 dark:text-white truncate">{u.fullName}</span>
+                                                                    </div>
+                                                                    <button
+                                                                        className="rounded-md border border-gray-300 dark:border-gray-700 px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                                        disabled={!!invitingUserId || !/^[0-9a-fA-F-]{36}$/.test(group?.groupId || "")}
+                                                                        onClick={async () => {
+                                                                            if (!group?.groupId || !/^[0-9a-fA-F-]{36}$/.test(group.groupId)) return;
+                                                                            setInvitingUserId(u.userId);
+                                                                            try {
+                                                                                await inviteUserToGroup(group.groupId, [u.userId]);
+                                                                                setCandidates(prev => prev.filter(c => c.userId !== u.userId));
+                                                                            } finally {
+                                                                                setInvitingUserId(null);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        {invitingUserId === u.userId ? "Đang mời..." : "Mời"}
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     )}
                                                 </div>
-                                                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Liên kết sẽ chuyển người dùng tới ứng dụng: http://localhost:3000/</p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {(!searchTerm.trim() || searchTerm.trim().length < 2) && !isSearching && candidates.length === 0 && (
+                                                    <div className="text-sm text-gray-500 dark:text-gray-400">Nhập từ khóa để tìm người dùng.</div>
+                                                )}
+
+                                                {searchTerm.trim().length >= 2 && !isSearching && candidates.length === 0 && (
+                                                    <div className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy người dùng.</div>
+                                                )}
+                                                {/* Khi có kết quả, hiển thị trong dropdown phía trên; không render danh sách dài phía dưới */}
                                             </div>
                                         </div>
                                     </TabsContent>

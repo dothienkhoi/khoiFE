@@ -31,6 +31,11 @@ export default function GroupsPage() {
         setSelectedGroup(group);
     };
 
+    const handleBackToExplore = () => {
+        // Clear current selection so user can click the same conversation again later
+        setSelectedGroup(null);
+    };
+
     return (
         <div className="flex h-full chat-page-layout">
             {/* Cột trái: Danh sách trò chuyện nhóm */}
@@ -50,6 +55,7 @@ export default function GroupsPage() {
                     groupAvatar={selectedGroup?.avatarUrl || undefined}
                     groupType={selectedGroup?.groupType}
                     description={selectedGroup?.description}
+                    onBackToExplore={handleBackToExplore}
                 />
             </div>
         </div>

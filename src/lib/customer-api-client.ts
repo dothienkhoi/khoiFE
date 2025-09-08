@@ -475,7 +475,7 @@ export const getGroups = async () => {
 export const createGroup = async (data: {
     groupName: string;
     description?: string;
-    groupType: "Public" | "Private";
+    groupType: "Public" | "Private" | "community";
     groupAvatarUrl?: string;
 }) => {
     try {
@@ -622,15 +622,26 @@ export const getGroupMembers = async (groupId: string) => {
 };
 
 // Public groups listing (searchable, paginated)
-export const getPublicGroups = async (pageNumber: number = 1, pageSize: number = 20, searchTerm?: string) => {
+// getPublicGroups removed per request
+export const getPublicGroups = async (
+    pageNumber: number = 1,
+    pageSize: number = 20,
+    searchTerm?: string
+) => {
     const params = new URLSearchParams();
-    params.append("pageNumber", String(pageNumber));
-    params.append("pageSize", String(pageSize));
-    if (searchTerm && searchTerm.trim()) params.append("searchTerm", searchTerm.trim());
+    params.append("PageNumber", String(pageNumber));
+    params.append("PageSize", String(pageSize));
+    if (searchTerm && searchTerm.trim()) params.append("SearchTerm", searchTerm.trim());
     const response = await customerApiClient.get<CustomerApiResponse<{
-        items: Array<{ groupId: string; groupName: string; description: string; groupAvatarUrl?: string | null; memberCount?: number }>;
+        items: Array<{ groupId?: string; groupID?: string; id?: string; groupName: string; description?: string; groupDescription?: string; groupAvatarUrl?: string | null; avatarUrl?: string | null; memberCount?: number }>;
         pageNumber: number; totalPages: number; totalRecords: number;
     }>>(`/groups/public?${params.toString()}`);
+    return response.data;
+};
+
+// Join a public group
+export const joinPublicGroup = async (groupId: string) => {
+    const response = await customerApiClient.post<CustomerApiResponse<null>>(`/groups/${groupId}/join`);
     return response.data;
 };
 
