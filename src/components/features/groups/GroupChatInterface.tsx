@@ -133,7 +133,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
             });
 
             // Send message via API
-            const response = await sendGroupMessage(groupId!, {
+            const response = await sendGroupMessage(actualConversationId!, {
                 content,
                 parentMessageId: replyTo?.id || undefined
             });
@@ -166,7 +166,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
             console.error('Error sending text message:', error);
             toast.error('Không thể gửi tin nhắn. Vui lòng thử lại.');
         }
-    }, [actualConversationId, addMessage, updateMessage, currentUser, setReplyToMessage, groupId]);
+    }, [actualConversationId, addMessage, updateMessage, currentUser, setReplyToMessage]);
 
     // Handle sending files
     const handleSendFiles = useCallback(async () => {
@@ -239,7 +239,11 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                                 </Badge>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                                {/* Ẩn hiển thị số thành viên trong header nhóm */}
+                                <span className="flex items-center gap-1">
+                                    <Users className="w-3 h-3" />
+                                    {memberCount || 1} thành viên
+                                </span>
+                                <span>•</span>
                                 <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
                                     {description || getDefaultDescription(groupType, groupName)}
                                 </span>

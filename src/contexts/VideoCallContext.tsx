@@ -63,24 +63,56 @@ export const VideoCallProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         )
     }, [videoCallActions])
 
-    // Setup real-time listeners (SignalR/WebSocket)
+    // Setup real-time listeners for video call events
     useEffect(() => {
-        // TODO: Kết nối SignalR/WebSocket để nhận thông báo cuộc gọi đến
-        // Ví dụ:
-        // const connection = new signalR.HubConnectionBuilder()
-        //     .withUrl("/videoCallHub")
-        //     .build()
+        // Listen for incoming call notifications from VideoCallHub
+        const handleIncomingCall = (event: CustomEvent) => {
+            const { sessionId, callerName, callerAvatar, conversationId } = event.detail;
+            handleIncomingCallNotification({
+                sessionId,
+                callerName,
+                callerAvatar,
+                conversationId
+            });
+        };
 
-        // connection.on("IncomingCall", handleIncomingCallNotification)
-        // connection.start()
+        // Listen for call accepted notifications
+        const handleCallAccepted = (event: CustomEvent) => {
+            const { sessionId } = event.detail;
+            // Handle call accepted logic
+            console.log("Call accepted:", sessionId);
+        };
 
-        // return () => {
-        //     connection.stop()
-        // }
+        // Listen for call rejected notifications
+        const handleCallRejected = (event: CustomEvent) => {
+            const { sessionId } = event.detail;
+            // Handle call rejected logic
+            console.log("Call rejected:", sessionId);
+            videoCallActions.cancelCall();
+        };
 
-        // Chờ Backend implement VideoCallHub để có real-time notifications
+        // Listen for call ended notifications
+        const handleCallEnded = (event: CustomEvent) => {
+            const { sessionId } = event.detail;
+            // Handle call ended logic
+            console.log("Call ended:", sessionId);
+            videoCallActions.cancelCall();
+        };
 
-    }, [handleIncomingCallNotification])
+        // Add event listeners
+        window.addEventListener('incomingCall', handleIncomingCall as EventListener);
+        window.addEventListener('callAccepted', handleCallAccepted as EventListener);
+        window.addEventListener('callRejected', handleCallRejected as EventListener);
+        window.addEventListener('callEnded', handleCallEnded as EventListener);
+
+        return () => {
+            // Cleanup event listeners
+            window.removeEventListener('incomingCall', handleIncomingCall as EventListener);
+            window.removeEventListener('callAccepted', handleCallAccepted as EventListener);
+            window.removeEventListener('callRejected', handleCallRejected as EventListener);
+            window.removeEventListener('callEnded', handleCallEnded as EventListener);
+        };
+    }, [handleIncomingCallNotification, videoCallActions])
 
     const contextValue: VideoCallContextType = {
         // State

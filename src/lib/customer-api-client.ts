@@ -255,13 +255,13 @@ export const uploadFilesToConversation = async (conversationId: number, files: F
     return response.data;
 };
 
-// Upload files to group
-export const uploadFilesToGroup = async (groupId: string, files: File[]) => {
+// Upload files to group conversation
+export const uploadFilesToGroup = async (conversationId: number, files: File[]) => {
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
 
     const response = await customerApiClient.post<CustomerApiResponse<Message[]>>(
-        `/groups/${groupId}/files`,
+        `/conversations/${conversationId}/files`,
         formData,
         {
             headers: { 'Content-Type': 'multipart/form-data' }
@@ -525,6 +525,25 @@ export const updateGroup = async (
     const response = await customerApiClient.put<CustomerApiResponse<any>>(
         `/groups/${groupId}`,
         data
+    );
+    return response.data;
+};
+
+// Upload avatar to temporary storage
+export const uploadAvatarToStaging = async (avatarFile: File) => {
+    const formData = new FormData();
+    formData.append('file', avatarFile);
+
+    // Sử dụng endpoint đúng từ Swagger UI (không có /v1)
+    const response = await axios.post<CustomerApiResponse<{ fileUrl: string }>>(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || "https://localhost:7007"}/api/UpFiles/staging/avatar`,
+        formData,
+        {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'Authorization': `Bearer ${useAuthStore.getState().accessToken}`
+            },
+        }
     );
     return response.data;
 };
@@ -1257,7 +1276,7 @@ export const markConversationAsRead = async (conversationId: number): Promise<Cu
  * Note: Backend expects conversationId as integer, not GUID
  */
 export const sendGroupMessage = async (
-    groupId: string,
+    conversationId: number,
     payload: { content: string; parentMessageId?: string | null }
 ) => {
     const body: { content: string; parentMessageId?: string | null } = {
@@ -1267,21 +1286,13 @@ export const sendGroupMessage = async (
         body.parentMessageId = payload.parentMessageId;
     }
 
-    // Backend có endpoint /api/v1/groups/{groupId}/messages nhưng chưa implement
-    // Tạm thời sử dụng conversations endpoint
     try {
         const response = await customerApiClient.post<
             CustomerApiResponse<Message>
-        >(`/conversations/${groupId}/messages`, body);
+        >(`/conversations/${conversationId}/messages`, body);
         return response.data;
     } catch (error: any) {
         console.error("Failed to send group message:", error);
-
-        // Nếu lỗi 404, có thể do backend chưa hỗ trợ GUID cho conversations
-        if (error.response?.status === 404) {
-            throw new Error("Backend chưa hỗ trợ gửi tin nhắn nhóm với GUID. Cần implement endpoint riêng cho groups.");
-        }
-
         throw error;
     }
 };

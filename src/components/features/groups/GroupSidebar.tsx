@@ -66,28 +66,20 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
         fetchGroups();
     }, []);
 
-    // Listen for real-time message updates
+    // Listen for real-time message updates (only update unread count, keep description)
     useEffect(() => {
         const handleNewMessage = (event: CustomEvent) => {
             const { conversationId, message, isFromCurrentUser } = event.detail;
 
             // Only update if message is from another user and we're not currently viewing this conversation
             if (!isFromCurrentUser && selectedGroupId !== conversationId.toString()) {
-                const messagePreview = getMessagePreview(
-                    message.messageType,
-                    message.content,
-                    message.sender.displayName
-                );
-
                 setGroups(prevGroups =>
                     prevGroups.map(group => {
                         if (group.conversationId === conversationId) {
                             return {
                                 ...group,
-                                unreadCount: (group.unreadCount || 0) + 1,
-                                lastMessagePreview: messagePreview,
-                                lastMessageTimestamp: message.sentAt,
-                                lastMessageType: message.messageType
+                                unreadCount: (group.unreadCount || 0) + 1
+                                // Keep description, don't update lastMessagePreview
                             };
                         }
                         return group;
@@ -215,11 +207,11 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                     groupName: group.groupName,
                     description: group.description || "",
                     avatarUrl: group.groupAvatarUrl || group.avatarUrl || null,
-                    lastMessagePreview: conversation?.lastMessagePreview || "Chưa có tin nhắn nào",
+                    lastMessagePreview: group.description || "", // Remove "Chưa có tin nhắn nào"
                     lastMessageTimestamp: conversation?.lastMessageTimestamp || null,
                     unreadCount: conversation?.unreadCount || 0,
                     groupType: group.groupType || undefined,
-                    groupMemberCount: group.memberCount || 1,
+                    memberCount: group.memberCount || 1, // Fix typo: groupMemberCount -> memberCount
                     conversationId: conversation?.conversationId // Use conversationId from conversation
                 };
             });
@@ -237,7 +229,7 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                     groupName: conversation.displayName,
                     description: "",
                     avatarUrl: conversation.avatarUrl || null,
-                    lastMessagePreview: conversation.lastMessagePreview || "Chưa có tin nhắn nào",
+                    lastMessagePreview: "", // Remove "Chưa có tin nhắn nào"
                     lastMessageTimestamp: conversation.lastMessageTimestamp || null,
                     unreadCount: conversation.unreadCount || 0,
                     groupType: undefined,
@@ -251,40 +243,21 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
 
     // Add new group to the top of the list after creating
     const handleGroupCreated = async (newGroupData?: any) => {
-        if (newGroupData && newGroupData.success && newGroupData.data) {
-            // Create new group object with proper structure
-            const newGroup: Group = {
-                groupId: newGroupData.data.groupId,
-                groupName: newGroupData.data.groupName,
-                description: newGroupData.data.description || "",
-                avatarUrl: newGroupData.data.groupAvatarUrl || null,
-                lastMessagePreview: "Chưa có tin nhắn nào",
-                lastMessageTimestamp: undefined,
-                unreadCount: 0,
-                groupType: newGroupData.data.groupType || "Public",
-                memberCount: 1, // New group has 1 member (creator)
-                conversationId: newGroupData.data.defaultConversationId // Use defaultConversationId from API response
-            };
+        // Always refresh the entire list to get the latest data including avatar
+        try {
+            const [groupsResponse, conversationsResponse] = await Promise.all([
+                getGroups(),
+                getGroupConversations()
+            ]);
 
-            // Add new group to the top of the list
-            setGroups(prevGroups => [newGroup, ...prevGroups]);
-        } else {
-            // Fallback: refresh the entire list if no new group data
-            try {
-                const [groupsResponse, conversationsResponse] = await Promise.all([
-                    getGroups(),
-                    getGroupConversations()
-                ]);
-
-                const mergedGroups = mergeGroupsAndConversations(
-                    groupsResponse.success ? groupsResponse.data?.items || [] : [],
-                    conversationsResponse.success ? conversationsResponse.data || [] : []
-                );
-                setGroups(mergedGroups);
-            } catch (error) {
-                console.error("Error refreshing groups and conversations:", error);
-                setGroups([]);
-            }
+            const mergedGroups = mergeGroupsAndConversations(
+                groupsResponse.success ? groupsResponse.data?.items || [] : [],
+                conversationsResponse.success ? conversationsResponse.data || [] : []
+            );
+            setGroups(mergedGroups);
+        } catch (error) {
+            console.error("Error refreshing groups and conversations:", error);
+            setGroups([]);
         }
     };
 
