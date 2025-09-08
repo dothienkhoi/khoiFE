@@ -115,6 +115,8 @@ export function GroupItem({ group, isSelected = false, onClick }: GroupItemProps
                                 <span className="whitespace-nowrap text-xs leading-none">{groupTypeInfo.label}</span>
                             </Badge>
                         )}
+                        {/* Member Count hidden as requested */}
+
                     </div>
                 </div>
 

@@ -92,7 +92,29 @@ export function CommunitiesSidebar({ selectedCommunity, onCommunitySelect }: Com
         }
     };
 
-    useEffect(() => { fetchCommunities(); }, []);
+    useEffect(() => {
+        fetchCommunities();
+    }, []);
+
+    // Listen for refresh events (e.g., when user leaves a group)
+    useEffect(() => {
+        const handleRefresh = () => {
+            fetchCommunities();
+            // Clear selection if the selected community is no longer in the list
+            if (selectedCommunity) {
+                const stillExists = communities.some(c => c.id === selectedCommunity);
+                if (!stillExists) {
+                    onCommunitySelect(null);
+                }
+            }
+        };
+
+        window.addEventListener('communities:refresh', handleRefresh);
+
+        return () => {
+            window.removeEventListener('communities:refresh', handleRefresh);
+        };
+    }, [selectedCommunity, communities, onCommunitySelect]);
 
     const filteredCommunities = communities.filter(community =>
         (community.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,7 +126,7 @@ export function CommunitiesSidebar({ selectedCommunity, onCommunitySelect }: Com
         e.stopPropagation(); setSelectedCommunityForSettings(community); setShowSettingsDialog(true);
     };
 
-    const handleCommunityCreated = () => { setShowCreateDialog(false); fetchCommunities(); };
+    const handleCommunityCreated = (_created: Community) => { setShowCreateDialog(false); fetchCommunities(); };
 
     return (
         <div className="h-full flex flex-col">
@@ -119,9 +141,21 @@ export function CommunitiesSidebar({ selectedCommunity, onCommunitySelect }: Com
                 </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {isLoading ? (
-                    <div className="space-y-3" />
+                    <div className="space-y-3">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className="p-3 rounded-lg animate-pulse">
+                                <div className="flex items-center space-x-3">
+                                    <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                                    <div className="flex-1">
+                                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+                                        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : filteredCommunities.length > 0 ? (
                     <div className="space-y-2">
                         {filteredCommunities.map((community) => (
@@ -138,9 +172,6 @@ export function CommunitiesSidebar({ selectedCommunity, onCommunitySelect }: Com
                                                 {community.isAdmin && (<Badge variant="secondary" className="text-xs">Admin</Badge>)}
                                             </div>
                                             <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{community.description}</p>
-                                            <div className="flex items-center space-x-1 mt-1">
-                                                <Users className="h-3 w-3 text-gray-400" /><span className="text-xs text-gray-500 dark:text-gray-400">{community.memberCount.toLocaleString()} thành viên</span>
-                                            </div>
                                         </div>
                                     </div>
                                     <Button variant="ghost" size="sm" onClick={(e) => handleSettingsClick(community, e)} className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"><Settings className="h-4 w-4" /></Button>

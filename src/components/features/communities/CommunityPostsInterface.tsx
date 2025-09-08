@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/utils";
-import { getGroupPosts, createGroupPost, togglePostLike, getPostDetail, addPostComment } from "@/lib/customer-api-client";
+import { getGroupPosts, createGroupPost, togglePostLike, getPostDetail, addPostComment, getGroupDetails } from "@/lib/customer-api-client";
 
 interface Comment {
     commentId: number;
@@ -100,13 +100,12 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [uploadedFileIds, setUploadedFileIds] = useState<string[]>([]);
+    const [editorKey, setEditorKey] = useState(0);
     const [showCreatePost, setShowCreatePost] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [hasMorePosts, setHasMorePosts] = useState(false);
     const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
-    const [postComments, setPostComments] = useState<Record<string, Comment[]>>({});
-    const [loadingComments, setLoadingComments] = useState<Record<string, boolean>>({});
-    const [newComment, setNewComment] = useState<Record<string, string>>({});
+    // Removed old inline comments list (we use Detail dialog only)
     const [detailOpen, setDetailOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailPost, setDetailPost] = useState<any>(null);
@@ -117,6 +116,7 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     const [editingTitle, setEditingTitle] = useState("");
     const [editingContent, setEditingContent] = useState("");
     const [deletingPost, setDeletingPost] = useState<Post | null>(null);
+    const [groupOwnerIds, setGroupOwnerIds] = useState<Set<string>>(new Set());
 
     const openPostDetail = async (post: Post) => {
         try {
@@ -162,28 +162,64 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
             const response = await getGroupPosts(groupId, page, 10);
             if (response.success && response.data) {
                 const items = response.data.items || [];
-                const mapped: Post[] = items.map((p: any) => ({
-                    id: p.id || p.postId?.toString(),
-                    postId: p.postId,
-                    title: p.title || p.Title || "", // fallback from DB casing
-                    content: p.content || p.contentMarkdown || p.contentSnippet || "", // include snippet from list API
-                    contentMarkdown: p.contentMarkdown || "",
-                    author: {
-                        id: p.author?.userId || p.authorId,
-                        userId: p.author?.userId || p.authorId,
-                        name: p.author?.displayName || p.authorName || p.author?.fullName || "Unknown User",
-                        fullName: p.author?.fullName || p.author?.displayName || p.authorName || "Unknown User",
-                        displayName: p.author?.displayName || p.authorName || p.author?.fullName || "Unknown User",
-                        avatarUrl: p.author?.avatarUrl || p.authorAvatar || p.author?.avatarURL
-                    },
-                    createdAt: p.createdAt,
-                    likeCount: p.likeCount || 0,
-                    commentCount: p.commentCount || 0,
-                    isLiked: p.isLikedByCurrentUser || p.isLiked,
-                    attachments: []
-                }));
+                const toBool = (v: any) => v === true || v === 1 || v === '1' || String(v).toLowerCase?.() === 'true';
+                // Read local like cache to keep red heart after navigation
+                const likedCache: Record<string, boolean> = (() => {
+                    try {
+                        const raw = localStorage.getItem('fb_liked_posts');
+                        return raw ? JSON.parse(raw) : {};
+                    } catch { return {}; }
+                })();
 
-                if (page === 1 || refresh) setPosts(mapped); else setPosts(prev => [...prev, ...mapped]);
+                const mapped: Post[] = items.map((p: any) => {
+                    const postId = p.postId;
+                    const serverIsLiked = toBool(p.isLikedByCurrentUser ?? p.isLiked ?? p.IsLiked ?? p.LikedByCurrentUser);
+                    const cachedIsLiked = likedCache[postId];
+                    const finalIsLiked = cachedIsLiked !== undefined ? !!cachedIsLiked : serverIsLiked;
+
+                    console.log(`[Like] Post ${postId}: server=${serverIsLiked}, cache=${cachedIsLiked}, final=${finalIsLiked}`);
+
+                    return {
+                        id: p.id || p.postId?.toString(),
+                        postId: p.postId,
+                        title: p.title || p.Title || "",
+                        content: p.content || p.contentMarkdown || p.contentSnippet || "",
+                        contentMarkdown: p.contentMarkdown || "",
+                        author: {
+                            id: p.author?.userId || p.authorId,
+                            userId: p.author?.userId || p.authorId,
+                            name: p.author?.displayName || p.authorName || p.author?.fullName || "Unknown User",
+                            fullName: p.author?.fullName || p.author?.displayName || p.authorName || "Unknown User",
+                            displayName: p.author?.displayName || p.authorName || p.author?.fullName || "Unknown User",
+                            avatarUrl: p.author?.avatarUrl || p.authorAvatar || p.author?.avatarURL
+                        },
+                        createdAt: p.createdAt,
+                        likeCount: p.likeCount ?? p.LikeCount ?? 0,
+                        commentCount: p.commentCount ?? p.CommentCount ?? 0,
+                        isLiked: finalIsLiked,
+                        attachments: []
+                    };
+                });
+
+                if (page === 1 || refresh) {
+                    setPosts(mapped);
+                    // Initialize like status for all posts
+                    const newLikeStatus: Record<string, boolean> = {};
+                    mapped.forEach(post => {
+                        newLikeStatus[post.id] = !!post.isLiked;
+                    });
+                    setLikeStatus(newLikeStatus);
+                } else {
+                    setPosts(prev => [...prev, ...mapped]);
+                    // Update like status for new posts
+                    setLikeStatus(prev => {
+                        const updated = { ...prev };
+                        mapped.forEach(post => {
+                            updated[post.id] = !!post.isLiked;
+                        });
+                        return updated;
+                    });
+                }
 
                 const totalPages = response.data.totalPages || 1;
                 const pageNumber = response.data.pageNumber || page;
@@ -209,6 +245,30 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [groupId]);
 
+    // Load group owners (admin/owner) to label Chủ nhóm
+    useEffect(() => {
+        const loadOwners = async () => {
+            try {
+                const res = await getGroupDetails(groupId);
+                if (res?.success && res?.data?.members) {
+                    const owners = new Set<string>();
+                    (res.data.members || []).forEach((m: any) => {
+                        const role = m.role || m.Role;
+                        if (role && (String(role).toLowerCase() === "admin" || String(role).toLowerCase() === "owner")) {
+                            owners.add(m.userId || m.UserID);
+                        }
+                    });
+                    setGroupOwnerIds(owners);
+                } else {
+                    setGroupOwnerIds(new Set());
+                }
+            } catch {
+                setGroupOwnerIds(new Set());
+            }
+        };
+        loadOwners();
+    }, [groupId]);
+
     const handleCreatePost = async () => {
         try {
             if (!newPostTitle.trim() || !newPostContent.trim()) return;
@@ -216,17 +276,21 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
 
             const payload = {
                 title: newPostTitle.trim(),
-                contentMarkdown: newPostContent.trim(),
+                content: newPostContent.trim(), // Send HTML content
+                contentMarkdown: newPostContent.trim(), // Also send as markdown for compatibility
                 attachmentFileIds: uploadedFileIds
             };
 
             const response = await createGroupPost(groupId, payload);
             if (response.success) {
                 toast.success("Đăng bài thành công!");
+                // Clear all form data
                 setNewPostTitle("");
                 setNewPostContent("");
                 setSelectedFiles([]);
                 setUploadedFileIds([]);
+                // Force re-render editor to clear content
+                setEditorKey(prev => prev + 1);
                 fetchPosts(1, true);
             } else {
                 toast.error(response.message || "Không thể đăng bài");
@@ -239,19 +303,67 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         }
     };
 
+    // Track pending like/unlike to avoid double clicks
+    const [likePending, setLikePending] = useState<Record<string, boolean>>({});
+
+    // Track like status separately to ensure UI updates correctly
+    const [likeStatus, setLikeStatus] = useState<Record<string, boolean>>({});
+
     const handleToggleLike = async (post: Post) => {
-        // Optimistic UI
-        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isLiked: !p.isLiked, likeCount: (p.likeCount || 0) + (p.isLiked ? -1 : 1) } : p));
+        if (likePending[post.id]) return; // prevent double action on the same post
+        setLikePending(prev => ({ ...prev, [post.id]: true }));
+
+        const currentIsLiked = post.isLiked;
+        const newIsLiked = !currentIsLiked;
+        const newLikeCount = Math.max(0, (post.likeCount || 0) + (newIsLiked ? 1 : -1));
+
+        console.log(`[Like] Toggling like for post ${post.id}, current: ${currentIsLiked} -> new: ${newIsLiked}`);
+
+        // Update like status state immediately
+        setLikeStatus(prev => ({ ...prev, [post.id]: newIsLiked }));
+
+        // Optimistic UI update immediately
+        setPosts(prev => prev.map(p =>
+            p.id === post.id
+                ? { ...p, isLiked: newIsLiked, likeCount: newLikeCount }
+                : p
+        ));
+
         try {
             const res = await togglePostLike(post.postId.toString());
             if (!res.success) {
-                // rollback on failure
-                setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isLiked: !p.isLiked, likeCount: (p.likeCount || 0) + (p.isLiked ? -1 : 1) } : p));
+                // Rollback on failure
+                console.log(`[Like] API failed, rolling back for post ${post.id}`);
+                setLikeStatus(prev => ({ ...prev, [post.id]: !!currentIsLiked }));
+                setPosts(prev => prev.map(p =>
+                    p.id === post.id
+                        ? { ...p, isLiked: currentIsLiked, likeCount: post.likeCount }
+                        : p
+                ));
                 toast.error(res.message || "Không thể thao tác thích/bỏ thích");
+            } else {
+                console.log(`[Like] API success for post ${post.id}, keeping optimistic state`);
+                // Keep the optimistic state since API succeeded
+                // Update cache to persist the state
+                try {
+                    const raw = localStorage.getItem('fb_liked_posts');
+                    const cache = raw ? JSON.parse(raw) : {};
+                    cache[post.postId] = newIsLiked;
+                    localStorage.setItem('fb_liked_posts', JSON.stringify(cache));
+                    console.log(`[Like] Updated cache for post ${post.postId}: ${newIsLiked}`);
+                } catch { }
             }
         } catch (error: any) {
-            setPosts(prev => prev.map(p => p.id === post.id ? { ...p, isLiked: !p.isLiked, likeCount: (p.likeCount || 0) + (p.isLiked ? -1 : 1) } : p));
+            console.log(`[Like] API error, rolling back for post ${post.id}`);
+            setLikeStatus(prev => ({ ...prev, [post.id]: !!currentIsLiked }));
+            setPosts(prev => prev.map(p =>
+                p.id === post.id
+                    ? { ...p, isLiked: currentIsLiked, likeCount: post.likeCount }
+                    : p
+            ));
             handleApiError(error, "Không thể thao tác thích/bỏ thích");
+        } finally {
+            setLikePending(prev => ({ ...prev, [post.id]: false }));
         }
     };
 
@@ -260,46 +372,7 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         await openPostDetail(post);
     };
 
-    const submitComment = async (post: Post) => {
-        const content = (newComment[post.id] || "").trim();
-        if (!content) return;
-        // optimistic add
-        const temp: Comment = {
-            commentId: Math.floor(Math.random() * 1e9),
-            content,
-            author: { userId: "me", fullName: "Bạn", avatarUrl: undefined },
-            createdAt: new Date().toISOString(),
-            parentCommentId: null,
-            replies: []
-        };
-        setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), temp] }));
-        setNewComment(prev => ({ ...prev, [post.id]: "" }));
-        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentCount: (p.commentCount || 0) + 1 } : p));
-        try {
-            const res = await addPostComment(post.postId.toString(), { content });
-            if (!res.success) {
-                toast.error(res.message || "Không thể bình luận");
-                // rollback count; keep temp comment for UX
-                setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentCount: Math.max(0, (p.commentCount || 1) - 1) } : p));
-            } else {
-                // Optionally refresh detail to get accurate server data
-                const detail = await getPostDetail(post.postId.toString());
-                if (detail.success) {
-                    const comments: Comment[] = (detail.data.comments || []).map((c: any) => ({
-                        commentId: c.commentId,
-                        content: c.content,
-                        author: { userId: c.author?.userId, fullName: c.author?.displayName || c.author?.fullName || "", avatarUrl: c.author?.avatarUrl },
-                        createdAt: c.createdAt,
-                        parentCommentId: c.parentCommentId,
-                        replies: []
-                    }));
-                    setPostComments(prev => ({ ...prev, [post.id]: comments }));
-                }
-            }
-        } catch (error: any) {
-            handleApiError(error, "Không thể bình luận");
-        }
-    };
+    // Comment submission is handled in the detail dialog
 
     const handleLoadMore = () => {
         if (hasMorePosts && !isLoadingPosts) fetchPosts(currentPage + 1);
@@ -443,10 +516,15 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
         <div className={level > 0 ? "ml-6 space-y-2" : "space-y-3"}>
             {nodes.map((c: any) => (
                 <div key={c.commentId} className="flex items-start space-x-3">
-
+                    <Avatar className="h-8 w-8">
+                        <AvatarImage src={isValidHttpUrl(c.author?.avatarUrl) ? c.author.avatarUrl : undefined} />
+                        <AvatarFallback>{getInitials(c.author?.fullName || c.author?.displayName || c.author?.name)}</AvatarFallback>
+                    </Avatar>
                     <div className="flex-1">
-                        <div className="text-sm font-medium">{c.author?.fullName}</div>
-                        <div className="text-sm text-gray-500">{formatDateAbsolute(c.createdAt)}</div>
+                        <div className="flex items-center justify-between">
+                            <div className="text-sm font-medium text-black dark:text-white">{c.author?.fullName || c.author?.displayName || c.author?.name || 'Người dùng'}</div>
+                            <div className="text-xs text-gray-500">{formatDateAbsolute(c.createdAt)}</div>
+                        </div>
                         <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{c.content}</div>
                         <div className="flex items-center space-x-2 mt-1">
                             <Input value={replyTextMap[c.commentId] || ""} onChange={(e) => setReplyTextMap(prev => ({ ...prev, [c.commentId]: e.target.value }))} placeholder="Trả lời bình luận..." className="h-7 text-xs px-2" />
@@ -454,32 +532,11 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                                 const content = (replyTextMap[c.commentId] || '').trim();
                                 if (!content) return;
                                 try {
-                                    // Optimistic add
-                                    const tempId = Math.floor(Math.random() * 1e9);
-                                    setDetailPost((prev: any) => prev ? {
-                                        ...prev,
-                                        comments: [
-                                            ...prev.comments,
-                                            {
-                                                commentId: tempId,
-                                                content,
-                                                author: prev.author,
-                                                createdAt: new Date().toISOString(),
-                                                parentCommentId: c.commentId
-                                            }
-                                        ]
-                                    } : prev);
                                     const res = await addPostComment((detailPost.postId || detailPost.id).toString(), { content, parentCommentId: c.commentId });
                                     if (res.success) {
                                         const detail = await getPostDetail((detailPost.postId || detailPost.id).toString());
                                         if (detail.success) {
-                                            // Merge optimistic comments (temporary ids) to avoid flicker if backend delays indexing
-                                            setDetailPost((prev: any) => {
-                                                const serverComments = detail.data?.comments || [];
-                                                const prevComments = prev?.comments || [];
-                                                const tempOnly = prevComments.filter((pc: any) => !serverComments.some((sc: any) => sc.commentId === pc.commentId));
-                                                return { ...detail.data, comments: [...serverComments, ...tempOnly] };
-                                            });
+                                            setDetailPost(detail.data);
                                             setDetailCommentsTree(buildCommentTree(detail.data.comments || []));
                                         }
                                         setReplyTextMap(prev => ({ ...prev, [c.commentId]: "" }));
@@ -500,7 +557,7 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
     );
 
     return (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="max-w-4xl mx-auto p-6 space-y-6">
                 <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-6 border border-gray-200 dark:border-gray-600">
                     <div className="flex items-center space-x-4">
@@ -559,6 +616,7 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                             </div>
 
                             <RichTextEditor
+                                key={editorKey}
                                 content={newPostContent}
                                 onChange={setNewPostContent}
                                 placeholder={`Nội dung chia sẻ với cộng đồng ${groupName}...`}
@@ -647,9 +705,10 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                                     </Avatar>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center space-x-2 mb-1">
-                                            <h3 className="font-bold text-black dark:text-white text-lg">{post.author.fullName || post.author.displayName || post.author.name || "Unknown User"}</h3>
+                                            <h3 className="font-bold text-black dark:text-white text-lg">{post.author.fullName || post.author.displayName || post.author.name || "Người dùng"}</h3>
+                                            {/* Vai trò: Chủ nhóm (người tạo nhóm) hoặc Thành viên */}
                                             <Badge variant="secondary" className="bg-purple-100 dark:bg-purple-600/20 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-500/30 text-xs px-2 py-1">
-                                                Member
+                                                {groupOwnerIds.has(post.author.userId as any) ? "Chủ nhóm" : "Thành viên"}
                                             </Badge>
                                         </div>
                                         <div className="flex items-center space-x-2 text-sm text-black dark:text-gray-400">
@@ -663,20 +722,37 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                                 {/* Post Content */}
                                 <div className="mb-6">
                                     <h4 className="text-xl font-bold text-black dark:text-white mb-3">{post.title}</h4>
-                                    <p className="text-black dark:text-gray-300 text-base leading-relaxed whitespace-pre-wrap">
-                                        {toPlainText(post.content || post.contentMarkdown || (post as any).contentSnippet || "")}
-                                    </p>
+                                    <div
+                                        className="text-black dark:text-gray-300 text-base leading-relaxed prose prose-sm dark:prose-invert max-w-none [&_p]:text-inherit [&_div]:text-inherit"
+                                        dangerouslySetInnerHTML={{
+                                            __html: post.content || post.contentMarkdown || (post as any).contentSnippet || ""
+                                        }}
+                                    />
                                 </div>
 
                                 {/* Interaction Bar */}
                                 <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
                                     <div className="flex items-center space-x-6">
                                         <button
-                                            onClick={() => handleToggleLike(post)}
-                                            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-black dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-200"
+                                            onClick={() => {
+                                                console.log(`[Like Button] Post ${post.id} isLiked: ${post.isLiked}, likeCount: ${post.likeCount}`);
+                                                handleToggleLike(post);
+                                            }}
+                                            disabled={!!likePending[post.id]}
+                                            aria-pressed={post.isLiked}
+                                            title={post.isLiked ? "Bỏ thích" : "Thích"}
+                                            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-black dark:text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all duration-200 ${likePending[post.id] ? "pointer-events-none opacity-60" : ""}`}
                                         >
-                                            <Heart className={`h-5 w-5 ${post.isLiked ? "fill-current text-red-500" : ""}`} />
-                                            <span className="text-sm font-medium">Thích</span>
+                                            {(() => {
+                                                const currentLikeStatus = likeStatus[post.id] !== undefined ? likeStatus[post.id] : post.isLiked;
+                                                console.log(`[Heart Render] Post ${post.id}: post.isLiked=${post.isLiked}, likeStatus=${likeStatus[post.id]}, final=${currentLikeStatus}`);
+                                                return currentLikeStatus ? (
+                                                    <Heart className="h-5 w-5 fill-current text-red-500" />
+                                                ) : (
+                                                    <Heart className="h-5 w-5 text-gray-400" />
+                                                );
+                                            })()}
+                                            <span className="text-sm font-medium">{post.isLiked ? "Bỏ thích" : "Thích"}</span>
                                             {post.likeCount > 0 && (
                                                 <span className="text-sm text-gray-600 dark:text-gray-400">({post.likeCount})</span>
                                             )}
@@ -693,24 +769,28 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                                         </button>
                                     </div>
                                     <div className="flex items-center space-x-2">
-                                        <Badge variant="outline" className="bg-blue-100 dark:bg-blue-600/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 text-xs px-3 py-1">
-                                            Bài của bạn
-                                        </Badge>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <button className="p-2 rounded-lg text-black dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-44 bg-white dark:bg-gray-800 text-black dark:text-gray-100 border border-gray-200 dark:border-gray-700">
-                                                <DropdownMenuItem onClick={() => onEditPost(post)} className="focus:bg-gray-100 dark:focus:bg-gray-700">
-                                                    Chỉnh sửa bài viết
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => onDeletePost(post)} className="text-red-600 focus:bg-red-50 dark:focus:bg-red-900/30">
-                                                    Xóa bài viết
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        {(post as any).author?.userId === (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('auth-storage') || '{}')?.state?.user?.id : undefined) && (
+                                            <Badge variant="outline" className="bg-blue-100 dark:bg-blue-600/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 text-xs px-3 py-1">
+                                                Bài của bạn
+                                            </Badge>
+                                        )}
+                                        {(post as any).author?.userId === (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('auth-storage') || '{}')?.state?.user?.id : undefined) && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button className="p-2 rounded-lg text-black dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-44 bg-white dark:bg-gray-800 text-black dark:text-gray-100 border border-gray-200 dark:border-gray-700">
+                                                    <DropdownMenuItem onClick={() => onEditPost(post)} className="focus:bg-gray-100 dark:focus:bg-gray-700">
+                                                        Chỉnh sửa bài viết
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => onDeletePost(post)} className="text-red-600 focus:bg-red-50 dark:focus:bg-red-900/30">
+                                                        Xóa bài viết
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
                                     </div>
                                 </div>
                             </CardContent>
@@ -734,101 +814,112 @@ export function CommunityPostsInterface({ groupId, groupName, groupAvatar }: Com
                 </div>
             </div>
             <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Chi tiết bài viết</DialogTitle>
-                        <DialogDescription className="sr-only">Cửa sổ hiển thị nội dung bài viết và các bình luận.</DialogDescription>
-                    </DialogHeader>
-                    {detailLoading ? (
-                        <div className="flex items-center text-gray-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Đang tải...</div>
-                    ) : detailPost ? (
-                        <div className="space-y-4">
-                            <div className="flex items-start space-x-3">
-                                <Avatar className="h-9 w-9">
-                                    <AvatarImage src={isValidHttpUrl(detailPost.author?.avatarUrl) ? detailPost.author?.avatarUrl : undefined} alt={detailPost.author?.fullName || "User"} />
-                                    <AvatarFallback>{getInitials(detailPost.author?.fullName)}</AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1">
-                                    <div className="font-semibold">{detailPost.author?.fullName}</div>
-                                    <div className="text-sm text-gray-500">{formatDateAbsolute(detailPost.createdAt)}</div>
+                <DialogContent className="max-w-3xl p-0 overflow-hidden">
+                    <div className="max-h-[80vh] overflow-y-auto p-6">
+                        <DialogHeader>
+                            <DialogTitle>Chi tiết bài viết</DialogTitle>
+                            <DialogDescription className="sr-only">Cửa sổ hiển thị nội dung bài viết và các bình luận.</DialogDescription>
+                        </DialogHeader>
+                        {detailLoading ? (
+                            <div className="flex items-center text-gray-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Đang tải...</div>
+                        ) : detailPost ? (
+                            <div className="space-y-4">
+                                <div className="flex items-start space-x-3">
+                                    <Avatar className="h-9 w-9">
+                                        <AvatarImage src={isValidHttpUrl(detailPost.author?.avatarUrl) ? detailPost.author?.avatarUrl : undefined} alt={detailPost.author?.fullName || "User"} />
+                                        <AvatarFallback>{getInitials(detailPost.author?.fullName)}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1">
+                                        <div className="font-semibold">{detailPost.author?.fullName}</div>
+                                        <div className="text-sm text-gray-500">{formatDateAbsolute(detailPost.createdAt)}</div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <div className="text-lg font-medium mb-2">{detailPost.title}</div>
-                                <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{toPlainText(detailPost.contentMarkdown || detailPost.content || "")}</div>
-                            </div>
-                            <div className="flex items-center space-x-6 pt-2">
-                                <button onClick={async () => {
-                                    try {
-                                        // optimistic
-                                        setDetailPost((prev: any) => prev ? { ...prev, isLiked: !prev.isLiked, likeCount: (prev.likeCount || 0) + (prev.isLiked ? -1 : 1) } : prev);
-                                        const res = await togglePostLike((detailPost.postId || detailPost.id).toString());
-                                        if (!res.success) {
-                                            setDetailPost((prev: any) => prev ? { ...prev, isLiked: !prev.isLiked, likeCount: (prev.likeCount || 0) + (prev.isLiked ? -1 : 1) } : prev);
-                                            toast.error(res.message || "Không thể thích/bỏ thích");
-                                        }
-                                    } catch (e: any) {
-                                        handleApiError(e, "Không thể thích/bỏ thích");
-                                    }
-                                }} className="flex items-center space-x-2 text-gray-600 hover:text-red-500 transition-colors">
-                                    <Heart className={`h-5 w-5 ${detailPost.isLiked ? 'fill-current text-red-500' : ''}`} />
-                                    <span className="text-sm font-medium">Thích</span>
-                                    <span className="text-sm text-gray-500">({detailPost.likeCount || 0})</span>
-                                </button>
-                                <div className="flex items-center space-x-2 text-gray-600">
-                                    <MessageCircle className="h-5 w-5" />
-                                    <span className="text-sm font-medium">Bình luận</span>
-                                    <span className="text-sm text-gray-500">({detailPost.commentCount || (detailPost.comments?.length || 0)})</span>
+                                <div>
+                                    <div className="text-lg font-medium mb-2">{detailPost.title}</div>
+                                    <div
+                                        className="text-gray-700 dark:text-gray-300 prose prose-sm dark:prose-invert max-w-none [&_p]:text-inherit [&_div]:text-inherit"
+                                        dangerouslySetInnerHTML={{
+                                            __html: detailPost.contentMarkdown || detailPost.content || ""
+                                        }}
+                                    />
                                 </div>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="font-semibold">Bình luận</div>
-                                {(() => {
-                                    const tree = buildCommentTree(detailPost.comments || []); return tree.length === 0 ? (
-                                        <div className="text-sm text-gray-500">Chưa có bình luận nào</div>
-                                    ) : (
-                                        renderComments(tree)
-                                    );
-                                })()}
-                                <div className="flex items-center space-x-2">
-                                    <Input value={detailNewComment} onChange={(e) => setDetailNewComment(e.target.value)} placeholder="Viết bình luận..." className="flex-1" />
-                                    <Button size="sm" onClick={async () => {
-                                        const content = detailNewComment.trim();
-                                        if (!content) return;
+                                <div className="flex items-center space-x-6 pt-2">
+                                    <button onClick={async () => {
                                         try {
-                                            // Optimistic add
-                                            const tempId = Math.floor(Math.random() * 1e9);
-                                            setDetailPost((prev: any) => prev ? {
-                                                ...prev,
-                                                comments: [
-                                                    ...prev.comments,
-                                                    {
-                                                        commentId: tempId,
-                                                        content,
-                                                        author: prev.author,
-                                                        createdAt: new Date().toISOString(),
-                                                        parentCommentId: null
-                                                    }
-                                                ]
-                                            } : prev);
-                                            const res = await addPostComment((detailPost.postId || detailPost.id).toString(), { content });
-                                            if (res.success) {
-                                                const detail = await getPostDetail((detailPost.postId || detailPost.id).toString());
-                                                if (detail.success) setDetailPost(detail.data);
-                                                setDetailNewComment("");
-                                            } else {
-                                                toast.error(res.message || 'Không thể bình luận');
+                                            // optimistic
+                                            setDetailPost((prev: any) => prev ? { ...prev, isLiked: !prev.isLiked, likeCount: (prev.likeCount || 0) + (prev.isLiked ? -1 : 1) } : prev);
+                                            const res = await togglePostLike((detailPost.postId || detailPost.id).toString());
+                                            if (!res.success) {
+                                                setDetailPost((prev: any) => prev ? { ...prev, isLiked: !prev.isLiked, likeCount: (prev.likeCount || 0) + (prev.isLiked ? -1 : 1) } : prev);
+                                                toast.error(res.message || "Không thể thích/bỏ thích");
                                             }
-                                        } catch (err: any) {
-                                            handleApiError(err, 'Không thể bình luận');
+                                        } catch (e: any) {
+                                            handleApiError(e, "Không thể thích/bỏ thích");
                                         }
-                                    }}>Gửi</Button>
+                                    }} className="flex items-center space-x-2 text-gray-600 hover:text-red-500 transition-colors">
+                                        {detailPost.isLiked ? (
+                                            <Heart className="h-5 w-5 fill-current text-red-500" />
+                                        ) : (
+                                            <Heart className="h-5 w-5 text-gray-400" />
+                                        )}
+                                        <span className="text-sm font-medium">Thích</span>
+                                        <span className="text-sm text-gray-500">({detailPost.likeCount || 0})</span>
+                                    </button>
+                                    <div className="flex items-center space-x-2 text-gray-600">
+                                        <MessageCircle className="h-5 w-5" />
+                                        <span className="text-sm font-medium">Bình luận</span>
+                                        <span className="text-sm text-gray-500">({detailPost.commentCount || (detailPost.comments?.length || 0)})</span>
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="font-semibold">Bình luận</div>
+                                    {(() => {
+                                        const tree = buildCommentTree(detailPost.comments || []); return tree.length === 0 ? (
+                                            <div className="text-sm text-gray-500">Chưa có bình luận nào</div>
+                                        ) : (
+                                            renderComments(tree)
+                                        );
+                                    })()}
+                                    <div className="flex items-center space-x-2">
+                                        <Input value={detailNewComment} onChange={(e) => setDetailNewComment(e.target.value)} placeholder="Viết bình luận..." className="flex-1" />
+                                        <Button size="sm" onClick={async () => {
+                                            const content = detailNewComment.trim();
+                                            if (!content) return;
+                                            try {
+                                                // Optimistic add
+                                                const tempId = Math.floor(Math.random() * 1e9);
+                                                setDetailPost((prev: any) => prev ? {
+                                                    ...prev,
+                                                    comments: [
+                                                        ...prev.comments,
+                                                        {
+                                                            commentId: tempId,
+                                                            content,
+                                                            author: prev.author,
+                                                            createdAt: new Date().toISOString(),
+                                                            parentCommentId: null
+                                                        }
+                                                    ]
+                                                } : prev);
+                                                const res = await addPostComment((detailPost.postId || detailPost.id).toString(), { content });
+                                                if (res.success) {
+                                                    const detail = await getPostDetail((detailPost.postId || detailPost.id).toString());
+                                                    if (detail.success) setDetailPost(detail.data);
+                                                    setDetailNewComment("");
+                                                } else {
+                                                    toast.error(res.message || 'Không thể bình luận');
+                                                }
+                                            } catch (err: any) {
+                                                handleApiError(err, 'Không thể bình luận');
+                                            }
+                                        }}>Gửi</Button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-sm text-gray-500">Không có dữ liệu</div>
-                    )}
+                        ) : (
+                            <div className="text-sm text-gray-500">Không có dữ liệu</div>
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
             {/* Edit Post Dialog */}
