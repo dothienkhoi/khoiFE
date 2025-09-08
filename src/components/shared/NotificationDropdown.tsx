@@ -26,24 +26,31 @@ import {
   RefreshCw
 } from "lucide-react";
 import { useCustomerStore } from "@/store/customerStore";
-import { CustomerNotification } from "@/types/customer.types";
-import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "@/lib/customer-api-client";
+import { CustomerNotification, GroupInvitation } from "@/types/customer.types";
+import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead, getPendingInvitations, respondToInvitation } from "@/lib/customer-api-client";
 import { formatDistanceToNow } from "date-fns";
 import { vi } from "date-fns/locale";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const router = useRouter();
   const { notifications, setNotifications, addNotification, unreadCount } = useCustomerStore();
   const store = useCustomerStore.getState();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
+  const [invitations, setInvitations] = useState<GroupInvitation[]>([]);
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
 
-  // Load notifications when dropdown opens
+  // Load notifications and invitations when dropdown opens
   useEffect(() => {
-    if (isOpen && notifications.length === 0) {
-      loadNotifications();
+    if (isOpen) {
+      if (notifications.length === 0) {
+        loadNotifications();
+      }
+      loadInvitations();
     }
   }, [isOpen]);
 
@@ -90,6 +97,41 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadInvitations = async () => {
+    if (isLoadingInvitations) return;
+
+    setIsLoadingInvitations(true);
+    try {
+      const response = await getPendingInvitations();
+      if (response.success) {
+        setInvitations(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading invitations:', error);
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  };
+
+  const handleInvitationResponse = async (invitationId: number, accept: boolean) => {
+    try {
+      const response = await respondToInvitation(invitationId, accept);
+      if (response.success) {
+        // Remove invitation from list
+        setInvitations(prev => prev.filter(inv => inv.invitationId !== invitationId));
+        // Show success message
+        // You can add toast notification here if needed
+        if (accept) {
+          // Điều hướng sang trang nhóm sau khi chấp nhận
+          // Nếu API không trả conversationId, chuyển sang trang nhóm chung để sidebar tự refresh
+          router.push('/groups');
+        }
+      }
+    } catch (error) {
+      console.error('Error responding to invitation:', error);
     }
   };
 
@@ -158,7 +200,7 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
   };
 
   // Use unreadCount from store (updated by SignalR) or calculate from notifications
-  const displayUnreadCount = unreadCount > 0 ? unreadCount : notifications.filter(n => !n.isRead).length;
+  const displayUnreadCount = unreadCount > 0 ? unreadCount : notifications.filter(n => !n.isRead).length + invitations.length;
 
   return (
     <>
@@ -275,6 +317,61 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
               </ScrollArea>
             )}
           </div>
+
+          {/* Invitations Section */}
+          {invitations.length > 0 && (
+            <>
+              <DropdownMenuSeparator />
+              <div className="p-3">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-muted-foreground">Lời mời tham gia nhóm</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => loadInvitations()}
+                    className="h-auto p-1 text-xs"
+                    disabled={isLoadingInvitations}
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isLoadingInvitations ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {invitations.map((invitation) => (
+                    <div key={invitation.invitationId} className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium">
+                          {invitation.groupName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{invitation.groupName}</p>
+                          <p className="text-xs text-muted-foreground">Mời bởi {invitation.invitedByName}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleInvitationResponse(invitation.invitationId, true)}
+                          className="h-7 px-2 text-xs"
+                        >
+                          <Check className="h-3 w-3 mr-1" />
+                          Chấp nhận
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleInvitationResponse(invitation.invitationId, false)}
+                          className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                        >
+                          <MoreHorizontal className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Xem tất cả button - luôn hiển thị */}
           <div className="p-3 border-t border-border/50 bg-muted/20">

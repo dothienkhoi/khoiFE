@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera, Loader2 } from "lucide-react";
-import { customerApiClient } from "@/lib/customer-api-client";
+import { updateUserAvatar } from "@/lib/customer-api-client";
 import { toast } from "sonner";
 
 interface AvatarUploadProps {
@@ -34,19 +34,17 @@ export function AvatarUpload({ onAvatarUpdated, className }: AvatarUploadProps) 
         setIsUploading(true);
 
         try {
-            const formData = new FormData();
-            formData.append("file", file);
+            const response = await updateUserAvatar(file);
 
-            const response = await customerApiClient.put("/me/avatar", formData, {
-                headers: { "Content-Type": "multipart/form-data" }
-            });
-
-            if (response.data && typeof response.data === 'object' && 'success' in response.data && response.data.success) {
+            if (response.success) {
                 toast.success("Cập nhật ảnh đại diện thành công");
                 onAvatarUpdated();
+            } else {
+                throw new Error(response.message || "Cập nhật ảnh đại diện thất bại");
             }
         } catch (error: any) {
-            toast.error(error.response?.data?.message || "Cập nhật ảnh đại diện thất bại");
+            console.error("Avatar upload error:", error);
+            toast.error(error.response?.data?.message || error.message || "Cập nhật ảnh đại diện thất bại");
         } finally {
             setIsUploading(false);
             // Reset file input

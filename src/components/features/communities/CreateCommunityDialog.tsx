@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Upload, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/utils";
+import { createGroup } from "@/lib/customer-api-client";
 
 interface Community {
     id: string;
@@ -62,26 +63,38 @@ export function CreateCommunityDialog({ open, onOpenChange, onCommunityCreated }
         setIsSubmitting(true);
 
         try {
-            // Sử dụng fallback solution vì đã xóa createGroup API
-            const newCommunity: Community = {
-                id: Date.now().toString(),
-                groupId: Date.now().toString(),
-                name: name.trim(),
-                description: description.trim(),
-                avatarUrl: avatarPreview,
-                memberCount: 1,
-                isAdmin: true
-            };
+            const response = await createGroup({
+                groupName: name.trim(),
+                description: description.trim() || "",
+                groupType: "Community",
+                groupAvatarUrl: avatarPreview || ""
+            });
 
-            onCommunityCreated(newCommunity);
-            toast.success("Tạo cộng đồng thành công! (Demo mode)");
+            if (response.success && response.data) {
+                const created: Community = {
+                    id: response.data.groupId,
+                    groupId: response.data.groupId,
+                    name: response.data.groupName || name.trim(),
+                    description: description.trim(),
+                    avatarUrl: avatarPreview || undefined,
+                    memberCount: 1,
+                    isAdmin: true
+                };
 
-            // Reset form
-            setName("");
-            setDescription("");
-            setAvatarFile(null);
-            setAvatarPreview("");
+                onCommunityCreated(created);
+                toast.success("Tạo cộng đồng thành công!");
 
+                setName("");
+                setDescription("");
+                setAvatarFile(null);
+                setAvatarPreview("");
+            } else {
+                toast.error(response.message || "Không thể tạo cộng đồng");
+            }
+
+        } catch (error: any) {
+            const handled = handleApiError(error, "Không thể tạo cộng đồng");
+            toast.error(handled.message);
         } finally {
             setIsSubmitting(false);
         }

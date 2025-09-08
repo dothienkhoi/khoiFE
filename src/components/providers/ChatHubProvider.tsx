@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from "react";
 import { HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
 import { useAuthStore } from "@/store/authStore";
 import { useCustomerStore } from "@/store/customerStore";
@@ -190,7 +190,7 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         });
     };
 
-    const connect = async () => {
+    const connect = useCallback(async () => {
         if (isConnecting || isConnected || !user || !accessToken) return;
 
         try {
@@ -236,9 +236,9 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
                 }
             }
         }
-    };
+    }, [isConnecting, isConnected, user, accessToken]);
 
-    const disconnect = async () => {
+    const disconnect = useCallback(async () => {
         if (connection) {
             try {
                 await connection.stop();
@@ -247,7 +247,7 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
             setConnection(null);
             setIsConnected(false);
         }
-    };
+    }, [connection]);
 
     const joinConversation = async (conversationId: number) => {
         if (!connection || !isConnected) return;
@@ -320,7 +320,7 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
 
             disconnect();
         };
-    }, [user, accessToken]);
+    }, [user, accessToken, connect, disconnect]);
 
     const value: ChatHubContextType = {
         connection,

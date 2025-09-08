@@ -30,7 +30,8 @@ export function ProfileGroups() {
                         description: g.description,
                         avatarUrl: g.avatarUrl,
                     }));
-                    setGroups(items);
+                    // Giới hạn hiển thị 5 nhóm mới nhất
+                    setGroups(items.slice(0, 5));
                 }
             } finally {
                 setIsLoading(false);

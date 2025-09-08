@@ -51,10 +51,175 @@ aside:has([data-sidebar]) {
   overflow: hidden !important;
 }
 
+/* Fixed layout for communities page */
+.communities-layout {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  background: #f9fafb !important;
+}
+
+.dark .communities-layout {
+  background: #111827 !important;
+}
+
+.communities-sidebar {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  height: 100vh !important;
+  width: 320px !important;
+  z-index: 50 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: white !important;
+  border-right: 1px solid #e5e7eb !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #cbd5e1 #f1f5f9 !important;
+}
+
+.communities-sidebar::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+.communities-sidebar::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+  border-radius: 3px !important;
+}
+
+.communities-sidebar::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 3px !important;
+}
+
+.communities-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+.dark .communities-sidebar {
+  background: #0f172a !important;
+  border-right: 1px solid #374151 !important;
+  scrollbar-color: #475569 #1e293b !important;
+}
+
+.dark .communities-sidebar::-webkit-scrollbar-track {
+  background: #1e293b !important;
+}
+
+.dark .communities-sidebar::-webkit-scrollbar-thumb {
+  background: #475569 !important;
+}
+
+.dark .communities-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #64748b !important;
+}
+
+.communities-content {
+  position: fixed !important;
+  left: 320px !important;
+  top: 0 !important;
+  right: 0 !important;
+  height: 100vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #f9fafb !important;
+  z-index: 40 !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* If the global app sidebar is present, offset the communities panels to avoid overlap */
+body:has(aside [data-sidebar]) .communities-sidebar {
+  left: 6rem !important;
+  /* match global sidebar width */
+}
+
+body:has(aside [data-sidebar]) .communities-content {
+  left: calc(6rem + 320px) !important;
+}
+
+.dark .communities-content {
+  background: #111827 !important;
+}
+
+/* Hide body scrollbar when on communities page */
+body:has(.communities-layout) {
+  overflow: hidden !important;
+}
+
+/* Hide global scrollbar when on communities page */
+body:has(.communities-layout) html::-webkit-scrollbar {
+  display: none !important;
+}
+
+body:has(.communities-layout) html {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+/* Ensure proper separation between sidebar and content */
+.communities-sidebar * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.communities-content * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Ensure content inside communities-content is properly positioned */
+.communities-content>* {
+  position: relative !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* Prevent any content from overlapping */
+.communities-layout>* {
+  box-sizing: border-box !important;
+}
+
+/* Ensure sidebar content doesn't overflow */
+.communities-sidebar {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Reset any inherited positioning that might cause overlap */
+.communities-layout {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.communities-layout * {
+  box-sizing: border-box !important;
+}
+
+/* Force content to start from the correct position */
+.communities-content {
+  transform: translateX(0) !important;
+}
+
+.dark .communities-sidebar {
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.3) !important;
+}
+
 /* Ensure main content doesn't overlap with fixed sidebar */
 main {
   margin-left: 6rem !important;
   /* 96px = 6rem */
+}
+
+/* Remove left indentation when using communities layout */
+body:has(.communities-layout) main {
+  margin-left: 0 !important;
 }
 
 /* Responsive adjustments */
@@ -510,6 +675,94 @@ body:has([data-radix-dialog-content]:not([data-state="closed"])) {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Global body scrollbar styles */
+html::-webkit-scrollbar {
+  width: 12px;
+}
+
+html::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 0;
+  margin: 0;
+}
+
+html::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+  border: none;
+  min-height: 40px;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+html::-webkit-scrollbar-button {
+  display: block;
+  height: 16px;
+  background: #374151;
+  border-radius: 0;
+  margin: 0;
+  border: none;
+}
+
+html::-webkit-scrollbar-button:hover {
+  background: #4b5563;
+}
+
+html::-webkit-scrollbar-button:single-button:vertical:decrement {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='%239ca3af' viewBox='0 0 8 8'><path d='M4 2L6 4L2 4L4 2Z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 8px;
+}
+
+html::-webkit-scrollbar-button:single-button:vertical:increment {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='%239ca3af' viewBox='0 0 8 8'><path d='M4 6L6 4L2 4L4 6Z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 8px;
+}
+
+/* Dark mode support for body scrollbar */
+.dark html::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.dark html::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+.dark html::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.dark html::-webkit-scrollbar-button {
+  background: #1f2937;
+}
+
+.dark html::-webkit-scrollbar-button:hover {
+  background: #374151;
+}
+
+.dark html::-webkit-scrollbar-button:single-button:vertical:decrement {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='%236b7280' viewBox='0 0 8 8'><path d='M4 2L6 4L2 4L4 2Z'/></svg>");
+}
+
+.dark html::-webkit-scrollbar-button:single-button:vertical:increment {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' fill='%236b7280' viewBox='0 0 8 8'><path d='M4 6L6 4L2 4L4 6Z'/></svg>");
+}
+
+/* For Firefox body scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #374151;
+}
+
+.dark html {
+  scrollbar-color: #6b7280 #1f2937;
 }
 
 /* Custom scrollbar styles */

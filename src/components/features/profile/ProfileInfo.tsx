@@ -8,8 +8,6 @@ import { useProfile } from "@/components/providers/ProfileProvider";
 export function ProfileInfo() {
     const { userProfile, isRefreshing } = useProfile();
 
-    // Profile info rendering
-
     if (!userProfile) return null;
 
     return (
@@ -35,22 +33,10 @@ export function ProfileInfo() {
                     <div className="flex items-center gap-3">
                         <User className="h-4 w-4 text-muted-foreground" />
                         <div>
-                            <p className="text-sm font-medium">Tên</p>
+                            <p className="text-sm font-medium">Họ và tên</p>
                             <p className="text-sm text-muted-foreground">
                                 {isRefreshing ? "Đang cập nhật..." : (
-                                    userProfile.firstName || 'Chưa cập nhật'
-                                )}
-                            </p>
-                        </div>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center gap-3">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                            <p className="text-sm font-medium">Họ</p>
-                            <p className="text-sm text-muted-foreground">
-                                {isRefreshing ? "Đang cập nhật..." : (
-                                    userProfile.lastName || 'Chưa cập nhật'
+                                    userProfile.fullName || 'Chưa cập nhật'
                                 )}
                             </p>
                         </div>
@@ -62,18 +48,27 @@ export function ProfileInfo() {
                             <p className="text-sm font-medium">Ngày sinh</p>
                             <p className="text-sm text-muted-foreground">
                                 {isRefreshing ? "Đang cập nhật..." : (
-                                    userProfile.dateOfBirth
-                                        ? new Date(userProfile.dateOfBirth).toLocaleDateString('vi-VN')
-                                        : 'Chưa cập nhật'
+                                    userProfile.dateOfBirth ?
+                                        new Date(userProfile.dateOfBirth).toLocaleDateString('vi-VN') :
+                                        'Chưa cập nhật'
                                 )}
                             </p>
                         </div>
                     </div>
-                    <Separator />
+                </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-md profile-card">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                        <FileText className="h-5 w-5" />
+                        Giới thiệu
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
                     <div className="flex items-center gap-3">
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                            <p className="text-sm font-medium">Giới thiệu</p>
+                        <div className="flex-1">
                             <p className="text-sm text-muted-foreground">
                                 {isRefreshing ? "Đang cập nhật..." : (
                                     userProfile.bio || 'Chưa cập nhật'
@@ -81,7 +76,6 @@ export function ProfileInfo() {
                             </p>
                         </div>
                     </div>
-
                 </CardContent>
             </Card>
 
@@ -101,18 +95,6 @@ export function ProfileInfo() {
                             }`}>
                             {isRefreshing ? "Đang cập nhật..." : (
                                 userProfile.twoFactorEnabled ? 'Đã bật' : 'Chưa bật'
-                            )}
-                        </span>
-                    </div>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Xác thực email</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${userProfile.emailConfirmed
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-green-300"
-                            }`}>
-                            {isRefreshing ? "Đang cập nhật..." : (
-                                userProfile.emailConfirmed ? 'Đã xác thực' : 'Chưa xác thực'
                             )}
                         </span>
                     </div>

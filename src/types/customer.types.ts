@@ -36,14 +36,13 @@ export interface ChatMessage {
 export interface UserProfile {
     id: string;
     email: string;
-    firstName: string;
-    lastName: string;
+    firstName?: string; // Optional vì API có thể không có
+    lastName?: string;  // Optional vì API có thể không có
     fullName: string;
     avatarUrl?: string;
     status: 'online' | 'offline' | 'away' | 'busy';
     lastSeen?: string;
     bio?: string;
-    phoneNumber?: string;
     dateOfBirth?: string;
     username?: string;
     coverPhoto?: string;
@@ -145,6 +144,24 @@ export interface CustomerNotification {
         navigateUrl: string;
     };
     type: 'NewMessage' | 'GroupInvitation' | 'FriendRequest' | 'Mention' | 'System' | 'PostLike' | 'PostComment';
+}
+
+/**
+ * Invitation Types
+ */
+export interface GroupInvitation {
+    invitationId: number;
+    groupName: string;
+    groupAvatarUrl: string;
+    invitedByName: string;
+    createdAt: string;
+}
+
+export interface InvitationLinkInfo {
+    groupId: string;
+    groupName: string;
+    groupAvatarUrl: string;
+    memberCount: number;
 }
 
 /**

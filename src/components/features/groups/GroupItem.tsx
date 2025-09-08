@@ -121,16 +121,7 @@ export function GroupItem({ group, isSelected = false, onClick }: GroupItemProps
                             </Badge>
                         )}
 
-                        {/* Member Count */}
-                        {group?.memberCount !== undefined && (
-                            <Badge
-                                variant="secondary"
-                                className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1 h-5 min-w-fit leading-none"
-                            >
-                                <Users className="w-3 h-3 flex-shrink-0" />
-                                <span className="whitespace-nowrap text-xs leading-none">{group.memberCount}</span>
-                            </Badge>
-                        )}
+                        {/* Member Count hidden as requested */}
                     </div>
                 </div>
 

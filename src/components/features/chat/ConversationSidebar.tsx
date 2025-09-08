@@ -110,18 +110,37 @@ export function ConversationSidebar() {
 
     // Load conversations on mount
     useEffect(() => {
-        refreshConversations();
+        const loadConversations = async () => {
+            try {
+                const result = await refreshConversations();
+                if (!result.success) {
+                    console.error('Failed to load conversations:', result.message);
+                    // You can add toast notification here if needed
+                }
+            } catch (error) {
+                console.error('Error loading conversations:', error);
+            }
+        };
+
+        loadConversations();
     }, [refreshConversations]);
 
     // Listen for refresh conversations event
     useEffect(() => {
         const handleRefreshConversations = async (event: CustomEvent) => {
             if (event.detail?.selectConversationId) {
-                // Refresh conversations list
-                await refreshConversations();
-
-                // Select the new conversation
-                setActiveChat(event.detail.selectConversationId.toString(), 'direct');
+                try {
+                    // Refresh conversations list
+                    const result = await refreshConversations();
+                    if (result.success) {
+                        // Select the new conversation
+                        setActiveChat(event.detail.selectConversationId.toString(), 'direct');
+                    } else {
+                        console.error('Failed to refresh conversations:', result.message);
+                    }
+                } catch (error) {
+                    console.error('Error refreshing conversations:', error);
+                }
             }
         };
 

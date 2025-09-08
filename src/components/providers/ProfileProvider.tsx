@@ -67,7 +67,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                             lastName: profileData.lastName || profileData.LastName || "",
                             dateOfBirth: profileData.dateOfBirth || profileData.DateOfBirth || "",
                             bio: profileData.bio || profileData.Bio || "",
-                            fullName: profileData.fullName || profileData.FullName || ""
+                            fullName: profileData.fullName || profileData.FullName || "",
+                            // Ensure 2FA flag is captured regardless of casing/naming
+                            twoFactorEnabled: (
+                                profileData.twoFactorEnabled ??
+                                profileData.TwoFactorEnabled ??
+                                profileData.isTwoFactorEnabled ??
+                                profileData.IsTwoFactorEnabled ??
+                                false
+                            )
                         };
 
                         console.log("[ProfileProvider] Original API fields:", {
@@ -107,7 +115,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                             lastName: directData.lastName || directData.LastName || "",
                             dateOfBirth: directData.dateOfBirth || directData.DateOfBirth || "",
                             bio: directData.bio || directData.Bio || "",
-                            fullName: directData.fullName || directData.FullName || ""
+                            fullName: directData.fullName || directData.FullName || "",
+                            twoFactorEnabled: (
+                                directData.twoFactorEnabled ??
+                                directData.TwoFactorEnabled ??
+                                directData.isTwoFactorEnabled ??
+                                directData.IsTwoFactorEnabled ??
+                                false
+                            )
                         };
 
                         console.log("[ProfileProvider] Direct response data:", directData);
@@ -230,6 +245,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                             if (prevProfile) {
                                 // Merge dữ liệu cũ với dữ liệu mới từ API
                                 const updatedProfile = { ...prevProfile, ...data.data } as UserProfile;
+
+                                // Đảm bảo 2FA được cập nhật ngay cả khi API không trả về field này
+                                if (typeof (updates as any)?.twoFactorEnabled === 'boolean') {
+                                    (updatedProfile as any).twoFactorEnabled = (updates as any).twoFactorEnabled;
+                                }
+
                                 console.log("[ProfileProvider] Previous profile:", prevProfile);
                                 console.log("[ProfileProvider] API response data:", data.data);
                                 console.log("[ProfileProvider] Updated profile state:", updatedProfile);
@@ -237,7 +258,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
                                 // Force re-render bằng cách tạo object mới hoàn toàn
                                 return { ...updatedProfile };
                             }
-                            return { ...(data.data as any) } as UserProfile;
+                            const baseProfile = { ...(data.data as any) } as UserProfile;
+                            if (typeof (updates as any)?.twoFactorEnabled === 'boolean') {
+                                (baseProfile as any).twoFactorEnabled = (updates as any).twoFactorEnabled;
+                            }
+                            return baseProfile;
                         });
 
                         console.log("[ProfileProvider] Profile updated successfully");
@@ -321,8 +346,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }, [userProfile]);
 
     useEffect(() => {
+        // Only load profile once on mount
         loadProfile();
-    }, []);
+    }, []); // Empty dependency array - only run once on mount
 
     const value: ProfileContextType = {
         userProfile,

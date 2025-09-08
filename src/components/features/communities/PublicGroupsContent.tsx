@@ -166,10 +166,7 @@ export function PublicGroupsContent({ selectedCommunity }: PublicGroupsContentPr
                                 </h1>
                                 <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
                                     <span>{selectedGroup.description}</span>
-                                    <div className="flex items-center space-x-1">
-                                        <Users className="h-3 w-3" />
-                                        <span>{selectedGroup.memberCount.toLocaleString()} thành viên</span>
-                                    </div>
+                                    {/* Ẩn số thành viên */}
                                     <Badge variant="outline">{selectedGroup.category}</Badge>
                                 </div>
                             </div>
@@ -217,7 +214,7 @@ export function PublicGroupsContent({ selectedCommunity }: PublicGroupsContentPr
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 {isLoading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[...Array(6)].map((_, i) => (
@@ -266,10 +263,7 @@ export function PublicGroupsContent({ selectedCommunity }: PublicGroupsContentPr
                                         <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{group.description}</p>
 
                                         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                                            <div className="flex items-center space-x-1">
-                                                <Users className="h-3 w-3" />
-                                                <span>{group.memberCount.toLocaleString()} thành viên</span>
-                                            </div>
+                                            {/* Ẩn số thành viên */}
                                             <div className="flex items-center space-x-1">
                                                 <Calendar className="h-3 w-3" />
                                                 <span>{group.lastActivity || ""}</span>

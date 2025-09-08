@@ -105,6 +105,11 @@ export function LoginForm() {
           response.data.accessToken,
           response.data.refreshToken
         );
+        // Mark 2FA enabled in profile context if server indicates it
+        try {
+          const evt = new Event("profile:refresh");
+          window.dispatchEvent(evt);
+        } catch { }
 
         // Redirect to returnUrl if available, otherwise to default page
         const returnUrl = getReturnUrl();
@@ -158,6 +163,11 @@ export function LoginForm() {
           response.data.accessToken,
           response.data.refreshToken
         );
+        // Notify profile providers to refresh twoFactorEnabled flag post-2FA
+        try {
+          const evt = new Event("profile:refresh");
+          window.dispatchEvent(evt);
+        } catch { }
 
         // Redirect to returnUrl if available, otherwise to default page
         const returnUrl = getReturnUrl();

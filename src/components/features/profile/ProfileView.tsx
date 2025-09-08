@@ -24,9 +24,9 @@ import { ProfileStats } from "./ProfileStats";
 import { ProfileGroups } from "./ProfileGroups";
 import { ProfileInfo } from "./ProfileInfo";
 import { useAuthStatus } from "@/hooks/useAuthStatus";
-
-
 import { TwoFactorSettings } from "./TwoFactorSettings";
+import { useAuthStore } from "@/store/authStore";
+
 
 interface LoginHistoryItem {
     id: string;
@@ -42,17 +42,31 @@ export function ProfileView() {
     const { userProfile, refreshProfile, isRefreshing } = useProfileSync();
     const { isLoading, error } = useProfile();
     const { isAuthenticated, authError, handleAuthError } = useAuthStatus();
+    const { updateUser } = useAuthStore();
     const [loginHistory, setLoginHistory] = useState<LoginHistoryItem[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('overview');
 
-    // Auto-load profile when component mounts
+    // Sync auth store when userProfile changes
     useEffect(() => {
-        if (!userProfile && !isLoading) {
-            console.log("[ProfileView] Auto-loading profile...");
-            refreshProfile();
+        if (userProfile) {
+            updateUser({
+                avatarUrl: userProfile.avatarUrl,
+                fullName: userProfile.fullName,
+                firstName: userProfile.firstName,
+                lastName: userProfile.lastName
+            });
+            console.log("[ProfileView] Auth store synced with userProfile:", userProfile.avatarUrl);
         }
-    }, [userProfile, isLoading, refreshProfile]);
+    }, [userProfile, updateUser]);
+
+    // Disabled auto-load to prevent unwanted page reloads
+    // useEffect(() => {
+    //     if (!userProfile && !isLoading) {
+    //         console.log("[ProfileView] Auto-loading profile...");
+    //         refreshProfile();
+    //     }
+    // }, [userProfile, isLoading, refreshProfile]);
 
     // Persist active tab to avoid resets on re-render/refreshes
     useEffect(() => {
@@ -66,13 +80,8 @@ export function ProfileView() {
         }
     };
 
-    // If session expired, silently redirect to login instead of showing an overlay in Profile
-    if (typeof window !== 'undefined') {
-        if (authError === 'AUTH_EXPIRED') {
-            const returnUrl = encodeURIComponent(window.location.pathname);
-            window.location.href = `/login?returnUrl=${returnUrl}`;
-        }
-    }
+    // Note: Removed automatic redirect to login to prevent unwanted page reloads
+    // Authentication errors will be handled gracefully without redirecting
 
     // Show loading state only if we don't have any profile data yet
     if (isLoading && !userProfile) {
@@ -149,35 +158,14 @@ export function ProfileView() {
 
                         {/* Fallback Tabs */}
                         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6 profile-content-area">
-                            <TabsList className="grid w-full grid-cols-5 bg-gray-100 dark:bg-gray-800 p-1 sticky top-0 z-10">
+                            <TabsList className="grid w-full grid-cols-4 bg-gray-100 dark:bg-gray-800 p-1 sticky top-0 z-10">
                                 <TabsTrigger value="overview" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Tổng quan</TabsTrigger>
                                 <TabsTrigger value="personal" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Thông tin cá nhân</TabsTrigger>
-                                <TabsTrigger value="chats" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Trò chuyện</TabsTrigger>
                                 <TabsTrigger value="security" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Bảo mật</TabsTrigger>
                                 <TabsTrigger value="activity" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Hoạt động</TabsTrigger>
                             </TabsList>
 
-                            <TabsContent value="overview" className="space-y-6 profile-tab-content">
-                                <Card className="border-0 shadow-md profile-card">
-                                    <CardContent className="p-6 text-center">
-                                        <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                        </div>
-                                        <p className="text-muted-foreground">Đang tải thông tin hồ sơ...</p>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
 
-                            <TabsContent value="chats" className="space-y-6 profile-tab-content">
-                                <Card className="border-0 shadow-md profile-card">
-                                    <CardContent className="p-6 text-center">
-                                        <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                        </div>
-                                        <p className="text-muted-foreground">Đang tải thông tin trò chuyện...</p>
-                                    </CardContent>
-                                </Card>
-                            </TabsContent>
                         </Tabs>
                     </div>
                 </div>
@@ -214,15 +202,9 @@ export function ProfileView() {
         try {
             console.log("[ProfileView] Profile updated, refreshing data...");
 
-            // Refresh profile data
+            // Refresh profile data first
             await refreshProfile();
             console.log("[ProfileView] Profile data refreshed successfully");
-
-            // Force re-render bằng cách trigger state update
-            setTimeout(() => {
-                console.log("[ProfileView] Forcing re-render...");
-                refreshProfile();
-            }, 100);
 
         } catch (error) {
             console.error("[ProfileView] Error refreshing profile:", error);
@@ -346,10 +328,9 @@ export function ProfileView() {
 
                     {/* Main Content Tabs */}
                     <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6 profile-content-area">
-                        <TabsList className="grid w-full grid-cols-5 bg-gray-100 dark:bg-gray-800 p-1 sticky top-0 z-10">
+                        <TabsList className="grid w-full grid-cols-4 bg-gray-100 dark:bg-gray-800 p-1 sticky top-0 z-10">
                             <TabsTrigger value="overview" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Tổng quan</TabsTrigger>
                             <TabsTrigger value="personal" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Thông tin cá nhân</TabsTrigger>
-                            <TabsTrigger value="chats" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Trò chuyện</TabsTrigger>
                             <TabsTrigger value="security" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Bảo mật</TabsTrigger>
                             <TabsTrigger value="activity" className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700">Hoạt động</TabsTrigger>
                         </TabsList>
@@ -370,15 +351,9 @@ export function ProfileView() {
                                     <CardTitle className="text-purple-700 dark:text-purple-300">Thông tin cá nhân</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-sm font-medium text-muted-foreground">Tên</p>
-                                            <p className="text-sm">{(userProfile?.firstName && userProfile.firstName.trim()) || (userProfile?.fullName ? userProfile.fullName.split(' ').slice(-1)[0] : '') || 'Chưa cập nhật'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium text-muted-foreground">Họ</p>
-                                            <p className="text-sm">{(userProfile?.lastName && userProfile.lastName.trim()) || (userProfile?.fullName ? userProfile.fullName.split(' ').slice(0, -1).join(' ') : '') || 'Chưa cập nhật'}</p>
-                                        </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-muted-foreground">Họ và tên</p>
+                                        <p className="text-sm">{userProfile?.fullName || 'Chưa cập nhật'}</p>
                                     </div>
                                     <Separator />
                                     <div>
@@ -402,104 +377,6 @@ export function ProfileView() {
                             </Card>
                         </TabsContent>
 
-                        {/* Chats Tab */}
-                        <TabsContent value="chats" className="space-y-6 profile-tab-content">
-                            <Card className="border-0 shadow-md profile-card">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
-                                        <Users className="h-5 w-5" />
-                                        Trò chuyện cá nhân và nhóm
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
-                                    {/* Direct Chats */}
-                                    <div>
-                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Trò chuyện cá nhân</h3>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center">
-                                                        <User className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium">Cuộc trò chuyện trực tiếp</p>
-                                                        <p className="text-sm text-muted-foreground">Nhắn tin riêng với bạn bè</p>
-                                                    </div>
-                                                </div>
-                                                <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                                                    Hoạt động
-                                                </Badge>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Group Chats */}
-                                    <div>
-                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Trò chuyện nhóm</h3>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center">
-                                                        <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium">Nhóm chat</p>
-                                                        <p className="text-sm text-muted-foreground">Tham gia các cuộc trò chuyện nhóm</p>
-                                                    </div>
-                                                </div>
-                                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                                    Hoạt động
-                                                </Badge>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Communities */}
-                                    <div>
-                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Cộng đồng</h3>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-full flex items-center justify-center">
-                                                        <Globe className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium">Cộng đồng</p>
-                                                        <p className="text-sm text-muted-foreground">Tham gia các cộng đồng và chia sẻ</p>
-                                                    </div>
-                                                </div>
-                                                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                                    Hoạt động
-                                                </Badge>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Quick Actions */}
-                                    <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                                        <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Hành động nhanh</h3>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/chat'}>
-                                                <User className="h-4 w-4 mr-2" />
-                                                Tìm bạn bè
-                                            </Button>
-                                            <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/groups'}>
-                                                <Users className="h-4 w-4 mr-2" />
-                                                Tạo nhóm mới
-                                            </Button>
-                                            <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/communities'}>
-                                                <Globe className="h-4 w-4 mr-2" />
-                                                Khám phá cộng đồng
-                                            </Button>
-                                            <Button variant="outline" className="justify-start" onClick={() => window.location.href = '/notifications'}>
-                                                <Heart className="h-4 w-4 mr-2" />
-                                                Xem thông báo
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
 
                         {/* Security Tab */}
                         <TabsContent value="security" className="space-y-6 profile-tab-content">
@@ -514,22 +391,6 @@ export function ProfileView() {
                                             <p className="text-sm text-muted-foreground">Cập nhật mật khẩu để bảo vệ tài khoản</p>
                                         </div>
                                         <PasswordChangeDialog onPasswordChanged={handlePasswordChanged} />
-                                    </div>
-                                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                        <div>
-                                            <p className="font-medium">Xác thực 2 yếu tố</p>
-                                            <p className="text-sm text-muted-foreground">Bật xác thực 2 yếu tố để tăng cường bảo mật</p>
-                                        </div>
-                                        <Badge
-                                            variant={userProfile.twoFactorEnabled ? "default" : "secondary"}
-                                            className={cn(
-                                                userProfile.twoFactorEnabled
-                                                    ? "bg-green-500 hover:bg-green-600"
-                                                    : "bg-gray-100 text-purple-700 border border-purple-200 dark:bg-gray-900/30 dark:text-purple-300 dark:border-purple-700"
-                                            )}
-                                        >
-                                            {userProfile.twoFactorEnabled ? 'Đã bật' : 'Chưa bật'}
-                                        </Badge>
                                     </div>
                                     <TwoFactorSettings />
                                 </CardContent>

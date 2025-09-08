@@ -29,9 +29,9 @@ export default function CommunitiesPage() {
     };
 
     return (
-        <div className="flex h-full communities-page-layout">
+        <div className="communities-layout">
             {/* Cột trái: Sidebar Cộng đồng */}
-            <div className="w-80 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+            <div className="communities-sidebar">
                 <CommunitiesSidebar
                     selectedCommunity={selectedCommunity?.id || null}
                     onCommunitySelect={handleCommunitySelect}
@@ -39,7 +39,7 @@ export default function CommunitiesPage() {
             </div>
 
             {/* Cột phải: Content */}
-            <div className="flex-1">
+            <div className="communities-content">
                 {selectedCommunity ? (
                     // Hiển thị giao diện đăng bài của cộng đồng đã chọn
                     <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -68,12 +68,7 @@ export default function CommunitiesPage() {
                                     </h1>
                                     <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
                                         <span>{selectedCommunity.description}</span>
-                                        <div className="flex items-center space-x-1">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                            </svg>
-                                            <span>{selectedCommunity.memberCount.toLocaleString()} thành viên</span>
-                                        </div>
+                                        {/* Ẩn số thành viên */}
                                         {selectedCommunity.isAdmin && (
                                             <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full">
                                                 Admin

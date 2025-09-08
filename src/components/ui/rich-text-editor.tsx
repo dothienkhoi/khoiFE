@@ -321,6 +321,13 @@ export function RichTextEditor({
         },
     });
 
+    // Update editor content when content prop changes (only when content is empty to clear editor)
+    React.useEffect(() => {
+        if (editor && content === '') {
+            editor.commands.setContent('');
+        }
+    }, [content, editor]);
+
     if (!mounted) {
         return (
             <div className={cn("border-2 border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden shadow-sm", className)}>

@@ -8,6 +8,5 @@ export { ScrollProgressBar } from './ScrollProgressBar';
 export { ScrollIndicator } from './ScrollIndicator';
 export { ProfileStats } from './ProfileStats';
 export { ProfileInfo } from './ProfileInfo';
-
 export { TwoFactorSettings } from './TwoFactorSettings';
 export { ProfileStateDebug } from './ProfileStateDebug';

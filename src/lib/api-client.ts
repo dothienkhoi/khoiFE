@@ -221,7 +221,7 @@ export const getDashboardSummary = async () => {
 
 // Get Recent Notifications
 export const getRecentNotifications = async (
-  pageNumber: number = 1, 
+  pageNumber: number = 1,
   pageSize: number = 10,
   typeFilter?: string,
   statusFilter?: 'all' | 'unread'
@@ -230,7 +230,7 @@ export const getRecentNotifications = async (
     pageNumber: pageNumber.toString(),
     pageSize: pageSize.toString(),
   });
-  
+
   if (typeFilter && typeFilter !== "all") {
     params.append("notificationType", typeFilter);
   }
@@ -239,7 +239,7 @@ export const getRecentNotifications = async (
   if (statusFilter === "unread") {
     params.append("isRead", "false");
   }
-  
+
   const response = await apiClient.get<ApiResponse<PagedResult<AdminNotificationDto>>>(
     `/admin/notification?${params.toString()}`
   );

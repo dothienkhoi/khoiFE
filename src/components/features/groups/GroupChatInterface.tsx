@@ -239,24 +239,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                                 </Badge>
                             </div>
                             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                                {memberCount !== undefined && memberCount > 0 && (
-                                    <>
-                                        <span className="flex items-center gap-1">
-                                            <Users className="w-3 h-3" />
-                                            {memberCount} thành viên
-                                        </span>
-                                        <span>•</span>
-                                    </>
-                                )}
-                                {(memberCount === undefined || memberCount === 0) && (
-                                    <>
-                                        <span className="flex items-center gap-1">
-                                            <Users className="w-3 h-3" />
-                                            Chưa có thành viên
-                                        </span>
-                                        <span>•</span>
-                                    </>
-                                )}
+                                {/* Ẩn hiển thị số thành viên trong header nhóm */}
                                 <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
                                     {description || getDefaultDescription(groupType, groupName)}
                                 </span>

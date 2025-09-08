@@ -334,6 +334,19 @@ export const acceptGroupInvitation = async (invitationCode: string) => {
     return response.data;
 };
 
+// Quản lý vai trò thành viên trong nhóm (Host/Admin)
+export const updateMemberRole = async (
+    groupId: string,
+    memberId: string,
+    action: "add_admin_role" | "remove_admin_role"
+) => {
+    const response = await customerApiClient.put<CustomerApiResponse<null>>(
+        `/groups/${groupId}/members/${memberId}/role`,
+        { action }
+    );
+    return response.data;
+};
+
 export const getGroupConversations = async () => {
     const response = await customerApiClient.get<CustomerApiResponse<Array<{
         conversationId: number;
@@ -532,6 +545,20 @@ export const updateGroupAvatar = async (groupId: string, avatarFile: File) => {
     return response.data;
 };
 
+// Upload avatar tạm để lấy URL (tiện ích)
+export const uploadStagingAvatar = async (file: File, category: string = 'general') => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('category', category);
+
+    const res = await customerApiClient.post<CustomerApiResponse<{ fileUrl: string }>>(
+        '/UpFiles/staging/avatar',
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return res.data;
+};
+
 export const deleteGroup = async (groupId: string) => {
     const response = await customerApiClient.delete<CustomerApiResponse<boolean>>(
         `/groups/${groupId}`
@@ -549,6 +576,15 @@ export const joinGroup = async (groupId: string) => {
 export const leaveGroup = async (groupId: string) => {
     const response = await customerApiClient.post<CustomerApiResponse<boolean>>(
         `/groups/${groupId}/leave`
+    );
+    return response.data;
+};
+
+// Admin cuối cùng: chuyển quyền cho thành viên mới và rời nhóm
+export const transferAndLeaveGroup = async (groupId: string, newAdminUserId: string) => {
+    const response = await customerApiClient.post<CustomerApiResponse<null>>(
+        `/groups/${groupId}/transfer-and-leave`,
+        { newAdminUserId }
     );
     return response.data;
 };
@@ -574,6 +610,8 @@ export const getGroupMembers = async (groupId: string) => {
     );
     return response.data;
 };
+
+// (deprecated duplicate) getGroupPosts removed - use the version at the bottom of the file
 
 // Group invitation functions
 export const searchUsersForInvite = async (groupId: string, searchTerm?: string) => {
