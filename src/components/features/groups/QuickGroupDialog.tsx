@@ -4,11 +4,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Users, Globe, Lock, LogOut } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Users, Globe, Lock, LogOut, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { getGroupDetails, getGroupMembers, searchUsersForInvite, inviteUserToGroup, createGroupInviteLink, leaveGroup } from "@/lib/customer-api-client";
+import { getGroupDetails, getGroupMembers, searchUsersForInvite, inviteUserToGroup, createGroupInviteLink, leaveGroup, updateGroupInfo, updateGroupAvatar } from "@/lib/customer-api-client";
 
 interface QuickGroupDialogProps {
     open: boolean;
@@ -63,6 +65,12 @@ export function QuickGroupDialog({ open, onOpenChange, group, onGroupLeft }: Qui
     const [generatedLink, setGeneratedLink] = useState<string>("");
     const [isGenerating, setIsGenerating] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
+    const [editName, setEditName] = useState("");
+    const [editDescription, setEditDescription] = useState("");
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [avatarPreview, setAvatarPreview] = useState<string>("");
+    const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    // We no longer upload avatar separately; handled in the single Save action
 
     useEffect(() => {
         let cancelled = false;
@@ -178,6 +186,13 @@ export function QuickGroupDialog({ open, onOpenChange, group, onGroupLeft }: Qui
     };
 
     const effective = fullInfo || group;
+    // Sync edit fields when dialog opens or group data loads
+    useEffect(() => {
+        if (!open || !effective) return;
+        setEditName(effective.groupName || "");
+        setEditDescription(effective.description || "");
+        setAvatarPreview(effective.avatarUrl || "");
+    }, [open, effective?.groupId]);
     const memberCountDisplay = typeof effective.memberCount === "number" && effective.memberCount > 0 ? effective.memberCount : 1;
 
     return (
@@ -405,7 +420,141 @@ export function QuickGroupDialog({ open, onOpenChange, group, onGroupLeft }: Qui
                                         </div>
                                     </TabsContent>
                                     <TabsContent value="edit" className="h-full">
-                                        <div className="text-sm text-gray-600 dark:text-gray-400">Form chỉnh sửa thông tin nhóm (sẽ gọi API sau).</div>
+                                        <div className="space-y-4 p-1">
+                                            {/* Avatar uploader - click on avatar to select */}
+                                            <div>
+                                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300 text-center">Ảnh đại diện nhóm</label>
+                                                <div className="flex justify-center">
+                                                    <div className="relative group cursor-pointer" onClick={() => document.getElementById('group-avatar-input')?.click()}>
+                                                        <Avatar className="h-20 w-20 ring-4 ring-gray-200 dark:ring-gray-700">
+                                                            <AvatarImage src={avatarPreview || ""} />
+                                                            <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-semibold text-xl">
+                                                                {editName?.charAt(0)?.toUpperCase() || "G"}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                            <Camera className="h-6 w-6 text-white" />
+                                                        </div>
+                                                    </div>
+
+                                                    <input
+                                                        id="group-avatar-input"
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="hidden"
+                                                        onChange={(e) => {
+                                                            const file = e.target.files?.[0] || null;
+                                                            if (!file) return;
+                                                            setAvatarFile(file);
+                                                            const reader = new FileReader();
+                                                            reader.onload = (ev) => setAvatarPreview(ev.target?.result as string);
+                                                            reader.readAsDataURL(file);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Tên nhóm</label>
+                                                <Input
+                                                    value={editName}
+                                                    onChange={(e) => setEditName(e.target.value)}
+                                                    placeholder="Nhập tên nhóm"
+                                                    maxLength={20}
+                                                    className="transition-all duration-200 focus:ring-2 focus:ring-[#ad46ff]/20 focus:border-[#ad46ff] bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                                                />
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {editName.length}/20 ký tự
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Mô tả</label>
+                                                <Textarea
+                                                    value={editDescription}
+                                                    onChange={(e) => setEditDescription(e.target.value)}
+                                                    placeholder="Nhập mô tả nhóm"
+                                                    maxLength={200}
+                                                    className="min-h-[100px] resize-none transition-all duration-200 focus:ring-2 focus:ring-[#ad46ff]/20 focus:border-[#ad46ff] bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                                                />
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {editDescription.length}/200 ký tự
+                                                </p>
+                                            </div>
+                                            <div className="flex justify-end gap-2 pt-2">
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setEditName(effective.groupName || "");
+                                                        setEditDescription(effective.description || "");
+                                                        setAvatarPreview(effective.avatarUrl || "");
+                                                        setAvatarFile(null);
+                                                    }}
+                                                >
+                                                    Đặt lại
+                                                </Button>
+                                                <Button
+                                                    onClick={async () => {
+                                                        if (!effective?.groupId) return;
+                                                        if (!editName.trim()) { toast.error("Vui lòng nhập tên nhóm"); return; }
+                                                        if (editName.length > 20) { toast.error("Tên nhóm không được vượt quá 20 ký tự"); return; }
+                                                        if (editDescription.length > 200) { toast.error("Mô tả không được vượt quá 200 ký tự"); return; }
+                                                        try {
+                                                            setIsSavingEdit(true);
+                                                            let newAvatarUrl = effective.avatarUrl;
+                                                            let hasNameOrDescriptionChange = false;
+
+                                                            // If avatar selected, upload avatar first (so we can broadcast one update)
+                                                            if (avatarFile) {
+                                                                const avatarRes = await updateGroupAvatar(effective.groupId, avatarFile);
+                                                                if (avatarRes?.success) {
+                                                                    newAvatarUrl = avatarRes.data?.avatarUrl || avatarPreview;
+                                                                    setAvatarPreview(newAvatarUrl);
+                                                                    setFullInfo(prev => prev ? { ...prev, avatarUrl: newAvatarUrl } : prev);
+                                                                } else {
+                                                                    toast.error(avatarRes?.message || "Không thể cập nhật ảnh nhóm");
+                                                                    return;
+                                                                }
+                                                            }
+
+                                                            // Check if name or description changed
+                                                            const nameChanged = editName.trim() !== (effective.groupName || "");
+                                                            const descChanged = editDescription !== (effective.description || "");
+                                                            hasNameOrDescriptionChange = nameChanged || descChanged;
+
+                                                            const res = await updateGroupInfo(effective.groupId, {
+                                                                groupName: editName.trim(),
+                                                                description: editDescription?.trim() || ""
+                                                            });
+                                                            if (res?.success) {
+                                                                // Only show success toast if name or description changed
+                                                                if (hasNameOrDescriptionChange) {
+                                                                    toast.success("Cập nhật nhóm thành công");
+                                                                }
+                                                                // Update local state so UI reflects changes immediately
+                                                                setFullInfo(prev => prev ? { ...prev, groupName: editName.trim(), description: editDescription } : prev);
+                                                                // Notify other UI parts (sidebar, headers) to update without reload
+                                                                window.dispatchEvent(new CustomEvent('groupInfoUpdated', {
+                                                                    detail: {
+                                                                        groupId: effective.groupId,
+                                                                        groupName: editName.trim(),
+                                                                        description: editDescription,
+                                                                        avatarUrl: newAvatarUrl
+                                                                    }
+                                                                }));
+                                                            } else {
+                                                                toast.error(res?.message || "Không thể cập nhật nhóm");
+                                                            }
+                                                        } catch (err) {
+                                                            toast.error("Có lỗi khi cập nhật nhóm");
+                                                        } finally {
+                                                            setIsSavingEdit(false);
+                                                        }
+                                                    }}
+                                                    disabled={isSavingEdit}
+                                                >
+                                                    {isSavingEdit ? "Đang lưu..." : "Lưu thay đổi"}
+                                                </Button>
+                                            </div>
+                                        </div>
                                     </TabsContent>
                                 </div>
                             </Tabs>

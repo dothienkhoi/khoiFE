@@ -211,6 +211,22 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId, refreshTrigger }:
         fetchGroups(1, false);
     }, []); // Empty dependency array - only run on mount
 
+    // React to group info updates broadcasted by dialogs
+    useEffect(() => {
+        const handleGroupInfoUpdated = (event: CustomEvent) => {
+            const { groupId, groupName, description, avatarUrl } = event.detail || {};
+            if (!groupId) return;
+            setGroups(prev => prev.map(g => g.groupId === groupId ? {
+                ...g,
+                groupName: groupName ?? g.groupName,
+                description: description ?? g.description,
+                avatarUrl: avatarUrl ?? g.avatarUrl
+            } : g));
+        };
+        window.addEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+        return () => window.removeEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+    }, []);
+
     // Listen for real-time message updates (only update unread count, keep description)
     useEffect(() => {
         const handleNewMessage = (event: CustomEvent) => {

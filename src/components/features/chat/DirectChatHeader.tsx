@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { useCustomerStore } from "@/store/customerStore";
 import UserProfileDialog from "./UserProfileDialog";
 import { VideoCallButton } from "../video-call/VideoCallButton";
+import { getConversationPartner } from "@/lib/customer-api-client";
+import { toast } from "sonner";
 
 interface DirectChatHeaderProps {
     conversation: Conversation;
@@ -41,6 +43,15 @@ export function DirectChatHeader({
     const [currentResultIndex, setCurrentResultIndex] = useState(-1);
     const [isSearching, setIsSearching] = useState(false);
     const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
+    const [userProfile, setUserProfile] = useState<{
+        id: string;
+        displayName: string;
+        avatar?: string;
+        isOnline?: boolean;
+        email?: string;
+        bio?: string;
+        dateOfBirth?: string;
+    } | null>(null);
 
     const { messages } = useCustomerStore();
 
@@ -170,8 +181,41 @@ export function DirectChatHeader({
     }, [searchQuery]);
 
     // Handle user profile toggle
-    const handleUserProfileToggle = () => {
-        setIsUserProfileOpen(!isUserProfileOpen);
+    const handleUserProfileToggle = async () => {
+        const nextOpen = !isUserProfileOpen;
+        setIsUserProfileOpen(nextOpen);
+        if (nextOpen) {
+            try {
+                const res = await getConversationPartner(conversation.conversationId);
+                if (res?.success && res.data) {
+                    setUserProfile({
+                        id: String(res.data.userId || res.data.id || conversation.conversationId),
+                        displayName: res.data.fullName || res.data.displayName || userName,
+                        avatar: res.data.avatarUrl || res.data.avatar || userAvatar,
+                        isOnline: res.data.presenceStatus === "Online",
+                        email: res.data.email,
+                        bio: res.data.bio,
+                        dateOfBirth: res.data.dateOfBirth
+                    });
+                } else {
+                    // Fallback to minimal data
+                    setUserProfile({
+                        id: conversation.conversationId.toString(),
+                        displayName: userName,
+                        avatar: userAvatar,
+                        isOnline: false
+                    });
+                }
+            } catch (error) {
+                toast.error("Không thể tải thông tin người dùng");
+                setUserProfile({
+                    id: conversation.conversationId.toString(),
+                    displayName: userName,
+                    avatar: userAvatar,
+                    isOnline: false
+                });
+            }
+        }
     };
 
     return (
@@ -328,7 +372,7 @@ export function DirectChatHeader({
             <UserProfileDialog
                 isOpen={isUserProfileOpen}
                 onClose={() => setIsUserProfileOpen(false)}
-                user={{
+                user={userProfile || {
                     id: conversation.conversationId.toString(),
                     displayName: userName,
                     avatar: userAvatar,

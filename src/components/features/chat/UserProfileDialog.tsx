@@ -16,6 +16,9 @@ interface UserProfileDialogProps {
         displayName: string;
         avatar?: string;
         isOnline?: boolean;
+        email?: string;
+        bio?: string;
+        dateOfBirth?: string;
     } | null;
 }
 
@@ -61,6 +64,28 @@ const UserProfileDialog: React.FC<UserProfileDialogProps> = ({
                             <span className="text-sm text-gray-600 dark:text-gray-400">
                                 {user.isOnline ? 'Đang hoạt động' : 'Không hoạt động'}
                             </span>
+                        </div>
+                    </div>
+
+                    {/* Thông tin bổ sung */}
+                    <div className="space-y-3 text-sm">
+                        {user.email && (
+                            <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+                                <span className="text-gray-500 dark:text-gray-400">Email</span>
+                                <span className="font-medium text-gray-900 dark:text-white">{user.email}</span>
+                            </div>
+                        )}
+                        {user.dateOfBirth && (
+                            <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+                                <span className="text-gray-500 dark:text-gray-400">Ngày sinh</span>
+                                <span className="font-medium text-gray-900 dark:text-white">{new Date(user.dateOfBirth).toLocaleDateString()}</span>
+                            </div>
+                        )}
+                        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+                            <div className="text-gray-500 dark:text-gray-400 mb-1">Giới thiệu</div>
+                            <div className={user.bio && user.bio.trim() ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400 italic"}>
+                                {user.bio && user.bio.trim() ? user.bio : "Người dùng này chưa thêm giới thiệu."}
+                            </div>
                         </div>
                     </div>
 

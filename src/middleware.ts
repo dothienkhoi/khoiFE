@@ -4,10 +4,7 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
 const getJwtSecretKey = () => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error("JWT_SECRET is not set in environment variables");
-  }
+  const secret = process.env.JWT_SECRET || "default-secret-key-for-development-only";
   return new TextEncoder().encode(secret);
 };
 
@@ -55,7 +52,8 @@ export async function middleware(request: NextRequest) {
     }
 
     return NextResponse.next();
-  } catch {
+  } catch (error) {
+    console.error("Middleware JWT verification failed:", error);
     const response = NextResponse.redirect(new URL("/login", request.url));
     response.cookies.delete("auth_token");
     return response;

@@ -27,6 +27,24 @@ export default function GroupsPage() {
         setActiveNavItem('groups');
     }, [setActiveNavItem]);
 
+    // Listen for group info updates to update selectedGroup state
+    useEffect(() => {
+        const handleGroupInfoUpdated = (event: CustomEvent) => {
+            const { groupId, groupName, description, avatarUrl } = event.detail || {};
+            if (!groupId || !selectedGroup || selectedGroup.groupId !== groupId) return;
+
+            setSelectedGroup(prev => prev ? {
+                ...prev,
+                groupName: groupName ?? prev.groupName,
+                description: description ?? prev.description,
+                avatarUrl: avatarUrl ?? prev.avatarUrl
+            } : null);
+        };
+
+        window.addEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+        return () => window.removeEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+    }, [selectedGroup]);
+
     // Handle group selection
     const handleGroupSelect = (group: Group) => {
         setSelectedGroup(group);

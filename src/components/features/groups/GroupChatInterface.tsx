@@ -43,12 +43,36 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
     const [isInfoOpen, setIsInfoOpen] = useState(false);
     const [showExplore, setShowExplore] = useState(false);
 
+    // Local state for group info that can be updated in real-time
+    const [currentGroupName, setCurrentGroupName] = useState(groupName);
+    const [currentDescription, setCurrentDescription] = useState(description);
+
     const actualConversationId = conversationId || (groupId ? Number(groupId) : null);
 
-    // When the selected group changes (from sidebar), exit Explore view
+    // When the selected group changes (from sidebar), exit Explore view and update local state
     useEffect(() => {
         setShowExplore(false);
-    }, [groupId, conversationId]);
+        setCurrentGroupName(groupName);
+        setCurrentDescription(description);
+    }, [groupId, conversationId, groupName, description]);
+
+    // Live update header info when group info changes elsewhere
+    useEffect(() => {
+        const handler = (event: CustomEvent) => {
+            const { groupId: changedId, groupName: newName, description: newDesc, avatarUrl: newAvatar } = event.detail || {};
+            if (!groupId || changedId !== groupId) return;
+            if (newName) {
+                setCurrentGroupName(newName);
+            }
+            if (newDesc !== undefined) {
+                setCurrentDescription(newDesc);
+            }
+            // Note: We don't update groupAvatar here as it's passed as prop from parent
+            // The parent (GroupsPage) should handle avatar updates through its state
+        };
+        window.addEventListener('groupInfoUpdated', handler as EventListener);
+        return () => window.removeEventListener('groupInfoUpdated', handler as EventListener);
+    }, [groupId]);
 
     // Reset unread count when entering group chat
     const resetUnreadCount = () => {
@@ -254,7 +278,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
         return <ExploreGroupsPanel onJoin={handleGroupJoin} />;
     }
 
-    if (!groupId || !groupName) {
+    if (!groupId || !currentGroupName) {
         return <ExploreGroupsPanel onJoin={handleGroupJoin} />;
     }
 
@@ -274,12 +298,12 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                             <Avatar className="h-10 w-10">
                                 <AvatarImage src={groupAvatar} />
                                 <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-semibold">
-                                    {groupName.charAt(0).toUpperCase()}
+                                    {currentGroupName.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <h2 className="font-semibold text-gray-900 dark:text-white">{groupName}</h2>
+                                    <h2 className="font-semibold text-gray-900 dark:text-white">{currentGroupName}</h2>
                                     <Badge
                                         variant="secondary"
                                         className={cn(
@@ -299,7 +323,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                                     </span>
                                     <span>•</span>
                                     <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                                        {description || getDefaultDescription(groupType, groupName)}
+                                        {currentDescription || getDefaultDescription(groupType, currentGroupName)}
                                     </span>
                                 </div>
                             </div>
@@ -327,7 +351,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                 <div className="flex-1 overflow-hidden min-h-0">
                     <MessageList
                         conversationId={actualConversationId!}
-                        partnerName={groupName}
+                        partnerName={currentGroupName}
                         partnerAvatar={groupAvatar}
                         onReplyToMessage={setReplyToMessage}
                         chatType="group"
@@ -352,8 +376,8 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                 onOpenChange={setIsInfoOpen}
                 group={{
                     groupId: groupId!,
-                    groupName: groupName || "Nhóm",
-                    description: description,
+                    groupName: currentGroupName || "Nhóm",
+                    description: currentDescription,
                     avatarUrl: groupAvatar,
                     groupType: groupType,
                     memberCount: memberCount

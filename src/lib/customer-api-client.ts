@@ -520,6 +520,18 @@ export const updateGroup = async (
     return response.data;
 };
 
+// Update group info (name, description) with canonical fields expected by API
+export const updateGroupInfo = async (
+    groupId: string,
+    payload: { groupName: string; description?: string | null }
+) => {
+    const response = await customerApiClient.put<CustomerApiResponse<any>>(
+        `/groups/${groupId}`,
+        payload
+    );
+    return response.data;
+};
+
 // Upload avatar to temporary storage
 export const uploadAvatarToStaging = async (avatarFile: File) => {
     const formData = new FormData();
@@ -642,6 +654,12 @@ export const joinPublicGroup = async (groupId: string) => {
 // Leave a group
 export const leaveGroup = async (groupId: string) => {
     const response = await customerApiClient.post<CustomerApiResponse<null>>(`/groups/${groupId}/leave`);
+    return response.data;
+};
+
+// Get partner details of a direct conversation
+export const getConversationPartner = async (conversationId: number) => {
+    const response = await customerApiClient.get<CustomerApiResponse<any>>(`/conversations/${conversationId}/partner`);
     return response.data;
 };
 
