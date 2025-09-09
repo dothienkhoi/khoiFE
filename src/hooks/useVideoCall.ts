@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { videoCallService, VideoCallResponse } from '@/lib/video-call-service'
+import { useChatHub } from '@/components/providers/ChatHubProvider'
 
 export interface VideoCallState {
     isOutgoingCallOpen: boolean
@@ -34,6 +35,7 @@ export interface VideoCallActions {
 }
 
 export const useVideoCall = (): [VideoCallState, VideoCallActions] => {
+    const { startVideoCall: startVideoCallSignalR } = useChatHub()
     const [state, setState] = useState<VideoCallState>({
         isOutgoingCallOpen: false,
         isIncomingCallOpen: false,
@@ -174,7 +176,10 @@ export const useVideoCall = (): [VideoCallState, VideoCallActions] => {
                     isConnecting: false
                 }))
 
-                console.log('Video call started successfully:', response.data)
+                // Gửi SignalR event đến người nhận
+                if (response.data.videoCallSessionId) {
+                    await startVideoCallSignalR(conversationId)
+                }
             } else {
                 throw new Error(response.message || 'Failed to start video call')
             }

@@ -14,7 +14,6 @@ export function VideoCallHubProvider({ children }: { children: React.ReactNode }
     useEffect(() => {
         isComponentMountedRef.current = true
         // Video call events are handled by ChatHubProvider
-        console.log("[VideoCallHub] Video call events handled through ChatHub")
 
         return () => {
             isComponentMountedRef.current = false

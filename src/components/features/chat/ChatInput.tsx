@@ -23,6 +23,8 @@ import { EmojiPicker } from "../boback/EmojiPicker";
 import { AttachmentPopup } from "./AttachmentPopup";
 import { FilePreview } from "../boback/FilePreview";
 import { ReplyPreview } from "../boback/ReplyPreview";
+import { MentionSuggestions } from "./MentionSuggestions";
+import { useMention } from "@/hooks/useMention";
 
 interface ChatInputProps {
     onSendMessage: (content: string, type: 'text' | 'image' | 'file', replyTo?: Message) => void;
@@ -32,6 +34,7 @@ interface ChatInputProps {
     disabled?: boolean;
     placeholder?: string;
     conversationId?: number;
+    groupId?: string; // Add groupId for @mention functionality
 }
 
 interface FilePreview {
@@ -47,7 +50,8 @@ export function ChatInput({
     onCancelReply,
     disabled = false,
     placeholder = "Nhập tin nhắn...",
-    conversationId
+    conversationId,
+    groupId
 }: ChatInputProps) {
     const { startTyping, stopTyping } = useChatHub();
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -57,6 +61,16 @@ export function ChatInput({
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<FilePreview[]>([]);
+
+    // Mention functionality
+    const {
+        mentionState,
+        activateMention,
+        selectMention,
+        handleKeyDown: handleMentionKeyDown,
+        handleInput: handleMentionInput,
+        deactivateMention
+    } = useMention();
 
 
 
@@ -137,6 +151,9 @@ export function ChatInput({
         }
 
         setMessage(value);
+
+        // Handle mention input
+        handleMentionInput(e);
 
         // Auto-resize textarea based on content
         if (textareaRef.current) {
@@ -352,12 +369,24 @@ export function ChatInput({
     }, [message, selectedFiles, disabled, conversationId, onSendMessage, onTyping, addMessage]);
 
     // Handle key press events
-    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        // Handle mention keydown first
+        handleMentionKeyDown(e);
+
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSendMessage();
         }
-    }, [handleSendMessage]);
+    }, [handleSendMessage, handleMentionKeyDown]);
+
+    // Handle mention selection
+    const handleMentionSelect = useCallback((user: any) => {
+        if (textareaRef.current) {
+            selectMention(user, textareaRef.current, (newText: string) => {
+                setMessage(newText);
+            });
+        }
+    }, [selectMention]);
 
     // Insert emoji into message
     const insertEmoji = useCallback((emoji: string) => {
@@ -700,6 +729,17 @@ export function ChatInput({
                     )}
                 </Button>
             </div>
+
+            {/* Mention Suggestions */}
+            {mentionState.isActive && groupId && (
+                <MentionSuggestions
+                    groupId={groupId}
+                    searchTerm={mentionState.searchTerm}
+                    onSelectUser={handleMentionSelect}
+                    onClose={deactivateMention}
+                    position={mentionState.position}
+                />
+            )}
         </div>
     );
 }

@@ -4,9 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Users, Globe, Lock } from "lucide-react";
+import { Users, Globe, Lock, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { getGroupDetails, getGroupMembers, searchUsersForInvite, inviteUserToGroup, createGroupInviteLink } from "@/lib/customer-api-client";
+import { getGroupDetails, getGroupMembers, searchUsersForInvite, inviteUserToGroup, createGroupInviteLink, leaveGroup } from "@/lib/customer-api-client";
 
 interface QuickGroupDialogProps {
     open: boolean;
@@ -19,9 +21,10 @@ interface QuickGroupDialogProps {
         avatarUrl?: string | null;
         memberCount?: number;
     } | null;
+    onGroupLeft?: () => void; // Callback khi rời khỏi nhóm thành công
 }
 
-export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialogProps) {
+export function QuickGroupDialog({ open, onOpenChange, group, onGroupLeft }: QuickGroupDialogProps) {
 
 
     if (!group) return null;
@@ -59,6 +62,7 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
     const [maxUses, setMaxUses] = useState<number>(1);
     const [generatedLink, setGeneratedLink] = useState<string>("");
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isLeaving, setIsLeaving] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -150,6 +154,29 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
         return () => clearTimeout(handle);
     }, [searchTerm, open, group?.groupId]);
 
+    const handleLeaveGroup = async () => {
+        if (!group?.groupId) return;
+
+        try {
+            setIsLeaving(true);
+            const response = await leaveGroup(group.groupId);
+
+            if (response.success) {
+                toast.success("Đã rời khỏi nhóm thành công");
+                onOpenChange(false); // Đóng dialog
+                // Gọi callback để refresh danh sách nhóm
+                onGroupLeft?.();
+            } else {
+                toast.error("Không thể rời khỏi nhóm");
+            }
+        } catch (error) {
+            console.error("Error leaving group:", error);
+            toast.error("Có lỗi xảy ra khi rời khỏi nhóm");
+        } finally {
+            setIsLeaving(false);
+        }
+    };
+
     const effective = fullInfo || group;
     const memberCountDisplay = typeof effective.memberCount === "number" && effective.memberCount > 0 ? effective.memberCount : 1;
 
@@ -182,13 +209,24 @@ export function QuickGroupDialog({ open, onOpenChange, group }: QuickGroupDialog
                             </p>
                         </div>
 
-                        <div className="p-3 bg-white/60 dark:bg-gray-800 rounded-lg flex items-center justify-between">
+                        <div className="p-3 bg-white/60 dark:bg-gray-800 rounded-lg flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
                                 <Users className="h-4 w-4" />
                                 <span>Thành viên</span>
                             </div>
                             <span className="text-sm font-medium text-gray-900 dark:text-white">{memberCountDisplay}</span>
                         </div>
+
+                        {/* Leave Group Button */}
+                        <Button
+                            onClick={handleLeaveGroup}
+                            disabled={isLeaving}
+                            variant="outline"
+                            className="w-full border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-700"
+                        >
+                            <LogOut className="h-4 w-4 mr-2" />
+                            {isLeaving ? "Đang rời khỏi..." : "Rời khỏi nhóm"}
+                        </Button>
                     </div>
 
                     {/* Right column - tabs */}

@@ -21,7 +21,7 @@ export const convertMessageType = (type: number): 'Text' | 'Image' | 'File' | 'S
  * Create Message object from messageDto
  */
 export const createMessageFromDto = (messageDto: any): Message => {
-    return {
+    const message = {
         id: messageDto.id,
         conversationId: messageDto.conversationId,
         content: messageDto.content,
@@ -33,11 +33,15 @@ export const createMessageFromDto = (messageDto: any): Message => {
         },
         sentAt: messageDto.sentAt,
         isDeleted: messageDto.isDeleted || false,
+        isRead: false, // Always start as unread for new messages
         attachments: messageDto.attachments || [],
         reactions: messageDto.reactions || [],
         parentMessageId: messageDto.parentMessageId,
         parentMessage: messageDto.parentMessage
     };
+
+
+    return message;
 };
 
 /**

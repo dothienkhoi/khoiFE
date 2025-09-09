@@ -219,9 +219,18 @@ export const useCustomerStore = create<CustomerState>()(
             },
 
             // Messages actions
-            setMessages: (conversationId, messages) => set((state) => ({
-                messages: { ...state.messages, [conversationId]: messages }
-            })),
+            setMessages: (conversationId, messages) => set((state) => {
+                // Đảm bảo tất cả tin nhắn có trường isRead với giá trị mặc định
+                const messagesWithDefaults = messages.map(message => ({
+                    ...message,
+                    isRead: message.isRead ?? false
+                }));
+
+
+                return {
+                    messages: { ...state.messages, [conversationId]: messagesWithDefaults }
+                };
+            }),
             addMessage: (conversationId, message) => set((state) => {
                 const existingMessages = state.messages[conversationId] || [];
 
@@ -233,20 +242,35 @@ export const useCustomerStore = create<CustomerState>()(
                     return state; // Không thêm duplicate
                 }
 
+                // Đảm bảo tin nhắn có trường isRead với giá trị mặc định
+                const messageWithDefaults = {
+                    ...message,
+                    isRead: message.isRead ?? false
+                };
+
+
                 // Thêm tin nhắn mới
                 return {
                     messages: {
                         ...state.messages,
-                        [conversationId]: [...existingMessages, message]
+                        [conversationId]: [...existingMessages, messageWithDefaults]
                     }
                 };
             }),
             updateMessage: (conversationId, messageId, updates) => set((state) => ({
                 messages: {
                     ...state.messages,
-                    [conversationId]: (state.messages[conversationId] || []).map(message =>
-                        message.id === messageId ? { ...message, ...updates } : message
-                    )
+                    [conversationId]: (state.messages[conversationId] || []).map(message => {
+                        if (message.id === messageId) {
+                            const updatedMessage = { ...message, ...updates };
+                            // Đảm bảo isRead có giá trị mặc định nếu không được cung cấp
+                            if (updates.isRead === undefined && message.isRead === undefined) {
+                                updatedMessage.isRead = false;
+                            }
+                            return updatedMessage;
+                        }
+                        return message;
+                    })
                 }
             })),
             removeMessage: (conversationId, messageId) => set((state) => ({
@@ -260,14 +284,18 @@ export const useCustomerStore = create<CustomerState>()(
             clearMessages: (conversationId) => set((state) => ({
                 messages: { ...state.messages, [conversationId]: [] }
             })),
-            markMessagesAsRead: (conversationId, messageIds) => set((state) => ({
-                messages: {
+            markMessagesAsRead: (conversationId, messageIds) => set((state) => {
+                const updatedMessages = {
                     ...state.messages,
-                    [conversationId]: (state.messages[conversationId] || []).map(message =>
-                        messageIds.includes(message.id) ? { ...message, isRead: true } : message
-                    )
-                }
-            })),
+                    [conversationId]: (state.messages[conversationId] || []).map(message => {
+                        if (messageIds.includes(message.id)) {
+                            return { ...message, isRead: true };
+                        }
+                        return message;
+                    })
+                };
+                return { messages: updatedMessages };
+            }),
 
             // Posts actions
             setPosts: (posts) => set({ posts }),

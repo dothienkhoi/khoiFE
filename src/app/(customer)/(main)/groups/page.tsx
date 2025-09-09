@@ -21,6 +21,7 @@ export default function GroupsPage() {
     } = useCustomerStore();
 
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     useEffect(() => {
         setActiveNavItem('groups');
@@ -34,6 +35,8 @@ export default function GroupsPage() {
     const handleBackToExplore = () => {
         // Clear current selection so user can click the same conversation again later
         setSelectedGroup(null);
+        // Trigger refresh of group list
+        setRefreshTrigger(prev => prev + 1);
     };
 
     return (
@@ -43,6 +46,7 @@ export default function GroupsPage() {
                 <GroupSidebar
                     onGroupSelect={handleGroupSelect}
                     selectedGroupId={selectedGroup?.groupId}
+                    refreshTrigger={refreshTrigger}
                 />
             </div>
 
@@ -56,6 +60,10 @@ export default function GroupsPage() {
                     groupType={selectedGroup?.groupType}
                     description={selectedGroup?.description}
                     onBackToExplore={handleBackToExplore}
+                    onGroupLeft={() => {
+                        // Khi rời khỏi nhóm, refresh danh sách nhóm
+                        setRefreshTrigger(prev => prev + 1);
+                    }}
                 />
             </div>
         </div>

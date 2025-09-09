@@ -28,6 +28,11 @@ interface ChatHubContextType {
     stopTyping: (conversationId: number) => Promise<void>;
     toggleReaction: (messageId: string, reactionCode: string) => Promise<void>;
     markMessagesAsRead: (conversationId: number, messageIds: string[]) => Promise<void>;
+    startVideoCall: (conversationId: number) => Promise<void>;
+    acceptVideoCall: (sessionId: string) => Promise<void>;
+    rejectVideoCall: (sessionId: string) => Promise<void>;
+    endVideoCall: (sessionId: string) => Promise<void>;
+    connectionStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
 }
 
 const ChatHubContext = createContext<ChatHubContextType | undefined>(undefined);
@@ -72,6 +77,7 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
 
     const setupEventHandlers = (hubConnection: HubConnection) => {
         hubConnection.on("ReceiveMessage", (messageDto: any) => {
+
             const message = createMessageFromDto(messageDto);
             const messagePreview = getMessagePreviewForConversation(messageDto);
             const conversations = useCustomerStore.getState().conversations;
@@ -93,7 +99,8 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
                         id: messageDto.id,
                         sentAt: messageDto.sentAt,
                         sender: messageDto.sender,
-                        parentMessage: messageDto.parentMessage
+                        parentMessage: messageDto.parentMessage,
+                        isRead: false // Always start as unread for new messages
                     });
                 }
 
@@ -134,6 +141,23 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
                     isFromCurrentUser: messageDto.sender.userId === user?.id
                 }
             }));
+
+            // Nếu người nhận đang xem cuộc trò chuyện, tự động đánh dấu tin nhắn là đã xem
+            if (messageDto.sender.userId === user?.id && isViewing && isDirect) {
+                setTimeout(() => {
+                    const { markMessagesAsRead: updateStore } = useCustomerStore.getState();
+                    updateStore(messageDto.conversationId, [messageDto.id]);
+
+                    // Dispatch event để người gửi biết tin nhắn đã được đọc
+                    window.dispatchEvent(new CustomEvent('messagesMarkedAsRead', {
+                        detail: {
+                            conversationId: messageDto.conversationId,
+                            messageIds: [messageDto.id],
+                            readerUserId: user?.id
+                        }
+                    }));
+                }, 200);
+            }
         });
 
         hubConnection.on("UserIsTyping", (conversationId: number, user: any) => {
@@ -159,19 +183,27 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         });
 
         // Messages marked as read event
-        hubConnection.on("MessagesMarkedAsRead", (conversationId: number, messageIds: string[]) => {
-            console.log("[ChatHub] Messages marked as read:", { conversationId, messageIds });
+        hubConnection.on("MessagesMarkedAsRead", (conversationId: number, messageIds: string[], readerUserId: string) => {
+            // Update message read status in store
+            const { markMessagesAsRead: updateStore } = useCustomerStore.getState();
+            updateStore(conversationId, messageIds);
 
             // Dispatch custom event for UI updates
             window.dispatchEvent(new CustomEvent('messagesMarkedAsRead', {
-                detail: { conversationId, messageIds }
+                detail: { conversationId, messageIds, readerUserId }
+            }));
+        });
+
+        // User joined conversation event
+        hubConnection.on("UserJoinedConversation", (conversationId: number, userId: string) => {
+            // Dispatch custom event for UI updates
+            window.dispatchEvent(new CustomEvent('userJoinedConversation', {
+                detail: { conversationId, userId }
             }));
         });
 
         // Video Call Events
         hubConnection.on("IncomingCall", (data: any) => {
-            console.log("[ChatHub] Incoming call received:", data);
-
             if (isComponentMounted.current) {
                 // Dispatch custom event for VideoCallContext
                 window.dispatchEvent(new CustomEvent('incomingCall', {
@@ -192,7 +224,6 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         });
 
         hubConnection.on("CallAccepted", (data: any) => {
-            console.log("[ChatHub] Call accepted:", data);
 
             if (isComponentMounted.current) {
                 window.dispatchEvent(new CustomEvent('callAccepted', {
@@ -210,7 +241,6 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         });
 
         hubConnection.on("CallRejected", (data: any) => {
-            console.log("[ChatHub] Call rejected:", data);
 
             if (isComponentMounted.current) {
                 window.dispatchEvent(new CustomEvent('callRejected', {
@@ -228,7 +258,6 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         });
 
         hubConnection.on("CallEnded", (data: any) => {
-            console.log("[ChatHub] Call ended:", data);
 
             if (isComponentMounted.current) {
                 window.dispatchEvent(new CustomEvent('callEnded', {
@@ -277,7 +306,9 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         });
     };
     const connect = useCallback(async () => {
-        if (isConnecting || isConnected || !user || !accessToken) return;
+        if (isConnecting || isConnected || !user || !accessToken) {
+            return;
+        }
 
         try {
             setIsConnecting(true);
@@ -336,9 +367,25 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
     }, [connection]);
 
     const joinConversation = async (conversationId: number) => {
-        if (!connection || !isConnected) return;
+        if (!connection || !isConnected) {
+            return;
+        }
         try {
             await connection.invoke("JoinConversation", conversationId);
+
+            // Auto-mark all unread messages as read when joining conversation
+            setTimeout(async () => {
+                const { messages } = useCustomerStore.getState();
+                const conversationMessages = messages[conversationId] || [];
+                const unreadMessages = conversationMessages.filter(msg =>
+                    msg.sender.userId !== user?.id && !msg.isRead
+                );
+
+                if (unreadMessages.length > 0) {
+                    const messageIds = unreadMessages.map(msg => msg.id);
+                    await markMessagesAsRead(conversationId, messageIds);
+                }
+            }, 100);
         } catch (error) {
         }
     };
@@ -382,10 +429,63 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
     };
 
     const markMessagesAsRead = async (conversationId: number, messageIds: string[]) => {
-        if (!connection || !isConnected) return;
+        if (!connection || !isConnected) {
+            return;
+        }
         try {
             const dto = { conversationId, messageIds };
             await connection.invoke("MarkMessagesAsRead", dto);
+
+            // Tạm thời tự động cập nhật trạng thái vì server không gửi event real-time
+            setTimeout(() => {
+                const { markMessagesAsRead: updateStore } = useCustomerStore.getState();
+                updateStore(conversationId, messageIds);
+
+                // Dispatch custom event để các component khác có thể lắng nghe
+                window.dispatchEvent(new CustomEvent('messagesMarkedAsRead', {
+                    detail: { conversationId, messageIds, readerUserId: user?.id }
+                }));
+            }, 500);
+        } catch (error) {
+        }
+    };
+
+    const startVideoCall = async (conversationId: number) => {
+        if (!connection || !isConnected) {
+            return;
+        }
+        try {
+            await connection.invoke("StartVideoCall", conversationId);
+        } catch (error) {
+        }
+    };
+
+    const acceptVideoCall = async (sessionId: string) => {
+        if (!connection || !isConnected) {
+            return;
+        }
+        try {
+            await connection.invoke("AcceptVideoCall", sessionId);
+        } catch (error) {
+        }
+    };
+
+    const rejectVideoCall = async (sessionId: string) => {
+        if (!connection || !isConnected) {
+            return;
+        }
+        try {
+            await connection.invoke("RejectVideoCall", sessionId);
+        } catch (error) {
+        }
+    };
+
+    const endVideoCall = async (sessionId: string) => {
+        if (!connection || !isConnected) {
+            return;
+        }
+        try {
+            await connection.invoke("EndVideoCall", sessionId);
         } catch (error) {
         }
     };
@@ -412,6 +512,8 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         };
     }, [user, accessToken, connect, disconnect]);
 
+    const connectionStatus = isConnected ? 'connected' : isConnecting ? 'connecting' : error ? 'error' : 'disconnected';
+
     const value: ChatHubContextType = {
         connection,
         isConnected,
@@ -425,6 +527,11 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         stopTyping,
         toggleReaction,
         markMessagesAsRead,
+        startVideoCall,
+        acceptVideoCall,
+        rejectVideoCall,
+        endVideoCall,
+        connectionStatus,
     };
 
     return (

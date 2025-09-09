@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useChatHub } from "@/components/providers/ChatHubProvider";
 import { getMessagePreview } from "@/lib/utils/messageUtils";
 import { QuickGroupDialog } from "./QuickGroupDialog";
-import { ExplorePublicGroups } from "./ExplorePublicGroups";
+import { ExploreGroupsPanel } from "./ExploreGroupsPanel";
 
 interface GroupChatInterfaceProps {
     groupId?: string;
@@ -28,9 +28,10 @@ interface GroupChatInterfaceProps {
     memberCount?: number;
     description?: string;
     onBackToExplore?: () => void;
+    onGroupLeft?: () => void; // Callback khi rời khỏi nhóm
 }
 
-export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType, memberCount, description, onBackToExplore }: GroupChatInterfaceProps) {
+export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType, memberCount, description, onBackToExplore, onGroupLeft }: GroupChatInterfaceProps) {
     const { addMessage, updateMessage, updateConversation } = useCustomerStore();
     const { user: currentUser } = useAuthStore();
     const { isConnected: isChatHubConnected } = useChatHub();
@@ -235,13 +236,26 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
     // Show Explore when toggled
     // Explore view removed
 
+    // Handle group join callback
+    const handleGroupJoin = useCallback((joinedGroupId: string) => {
+        console.log(`🎉 Group joined: ${joinedGroupId}`);
+        // Trigger refresh of group list in sidebar
+        // This will be handled by the parent component
+        if (onBackToExplore) {
+            // Small delay to ensure API has processed the join
+            setTimeout(() => {
+                onBackToExplore();
+            }, 500);
+        }
+    }, [onBackToExplore]);
+
     // If no group is selected, render empty state (no welcome screen)
     if (showExplore) {
-        return <ExplorePublicGroups />;
+        return <ExploreGroupsPanel onJoin={handleGroupJoin} />;
     }
 
     if (!groupId || !groupName) {
-        return <ExplorePublicGroups />;
+        return <ExploreGroupsPanel onJoin={handleGroupJoin} />;
     }
 
     const groupTypeInfo = getGroupTypeInfo(groupType);
@@ -329,6 +343,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                         placeholder="Nhập tin nhắn..."
                         replyTo={replyToMessage}
                         onCancelReply={() => setReplyToMessage(null)}
+                        groupId={groupId}
                     />
                 </div>
             </div>
@@ -342,6 +357,11 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                     avatarUrl: groupAvatar,
                     groupType: groupType,
                     memberCount: memberCount
+                }}
+                onGroupLeft={() => {
+                    // Khi rời khỏi nhóm, quay về explore và refresh
+                    onBackToExplore?.();
+                    onGroupLeft?.();
                 }}
             />
         </>

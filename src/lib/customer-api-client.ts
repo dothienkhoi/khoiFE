@@ -583,12 +583,6 @@ export const joinGroup = async (groupId: string) => {
     return response.data;
 };
 
-export const leaveGroup = async (groupId: string) => {
-    const response = await customerApiClient.post<CustomerApiResponse<boolean>>(
-        `/groups/${groupId}/leave`
-    );
-    return response.data;
-};
 
 // Admin cuối cùng: chuyển quyền cho thành viên mới và rời nhóm
 export const transferAndLeaveGroup = async (groupId: string, newAdminUserId: string) => {
@@ -645,16 +639,42 @@ export const joinPublicGroup = async (groupId: string) => {
     return response.data;
 };
 
+// Leave a group
+export const leaveGroup = async (groupId: string) => {
+    const response = await customerApiClient.post<CustomerApiResponse<null>>(`/groups/${groupId}/leave`);
+    return response.data;
+};
+
+// Get member suggestions for @mention
+export const getMentionSuggestions = async (groupId: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (search && search.trim()) {
+        params.append("search", search.trim());
+    }
+
+    const url = `/groups/${groupId}/mention-suggestions${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await customerApiClient.get<CustomerApiResponse<Array<{
+        userId: string;
+        fullName: string;
+        avatarUrl?: string | null;
+        presenceStatus?: string;
+    }>>>(url);
+    return response.data;
+};
+
 // My groups (created or joined) - paginated
 export const getMyGroupsPaged = async (pageNumber: number = 1, pageSize: number = 20, searchTerm?: string) => {
     const params = new URLSearchParams();
     params.append("pageNumber", String(pageNumber));
     params.append("pageSize", String(pageSize));
     if (searchTerm && searchTerm.trim()) params.append("searchTerm", searchTerm.trim());
+
+    const url = `/me/groups?${params.toString()}`;
+
     const response = await customerApiClient.get<CustomerApiResponse<{
         items: Array<{ conversationId: number; groupId: string; groupType?: string; groupName: string; description?: string; avatarUrl?: string | null }>;
         pageNumber: number; pageSize: number; totalRecords: number; totalPages: number;
-    }>>(`/me/groups?${params.toString()}`);
+    }>>(url);
     return response.data;
 };
 
@@ -802,10 +822,11 @@ export const updateUserProfile = async (data: Partial<{
 
 export const updateUserAvatar = async (avatarFile: File) => {
     const formData = new FormData();
-    formData.append("avatar", avatarFile);
+    // Backend expects the field name to be "file" per Swagger
+    formData.append("file", avatarFile);
 
-    const response = await customerApiClient.post<CustomerApiResponse<{ avatarUrl: string }>>(
-        "/profile/avatar",
+    const response = await customerApiClient.put<CustomerApiResponse<{ avatarUrl: string }>>(
+        "/me/avatar",
         formData,
         {
             headers: {
