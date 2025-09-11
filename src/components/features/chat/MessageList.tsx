@@ -80,12 +80,13 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
 
             if (unreadMessages.length > 0) {
                 const messageIds = unreadMessages.map(msg => msg.id);
-
                 // Mark as read in local store immediately for UI feedback
                 markMessagesAsReadStore(conversationId, messageIds);
 
-                // Send to server via SignalR
-                markMessagesAsRead(conversationId, messageIds);
+                // Send to server via SignalR with a small delay to ensure proper timing
+                setTimeout(() => {
+                    markMessagesAsRead(conversationId, messageIds);
+                }, 100);
             }
         }
     }, [conversationId, conversationMessages, currentUser?.id, markMessagesAsRead, markMessagesAsReadStore]);
@@ -93,20 +94,56 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
     // Listen for messages marked as read event from server
     useEffect(() => {
         const handleMessagesMarkedAsRead = (event: CustomEvent) => {
-            const { conversationId: eventConversationId, messageIds } = event.detail;
-
+            const { conversationId: eventConversationId, messageIds, readerUserId } = event.detail;
             if (eventConversationId === conversationId) {
                 // Update local store to reflect server confirmation
                 markMessagesAsReadStore(conversationId, messageIds);
             }
         };
 
+        // Listen for new messages to auto-mark as read if user is viewing
+        const handleNewMessage = (event: CustomEvent) => {
+            const { conversationId: eventConversationId, message, isFromCurrentUser } = event.detail;
+
+            if (eventConversationId === conversationId && !isFromCurrentUser && currentUser?.id) {
+                // Auto-mark new message as read if user is currently viewing this conversation
+                setTimeout(() => {
+                    markMessagesAsReadStore(conversationId, [message.id]);
+                    markMessagesAsRead(conversationId, [message.id]);
+                }, 500);
+            }
+        };
+
+        // Listen for user joining conversation to mark messages as read
+        const handleUserJoinedConversation = (event: CustomEvent) => {
+            const { conversationId: eventConversationId, userId } = event.detail;
+
+            if (eventConversationId === conversationId && userId !== currentUser?.id) {
+                // When someone joins the conversation, mark all unread messages as read
+                const unreadMessages = conversationMessages.filter(msg =>
+                    msg.sender.userId !== currentUser?.id && !msg.isRead
+                );
+
+                if (unreadMessages.length > 0) {
+                    const messageIds = unreadMessages.map(msg => msg.id);
+                    setTimeout(() => {
+                        markMessagesAsReadStore(conversationId, messageIds);
+                        markMessagesAsRead(conversationId, messageIds);
+                    }, 100);
+                }
+            }
+        };
+
         window.addEventListener('messagesMarkedAsRead', handleMessagesMarkedAsRead as EventListener);
+        window.addEventListener('newMessageReceived', handleNewMessage as EventListener);
+        window.addEventListener('userJoinedConversation', handleUserJoinedConversation as EventListener);
 
         return () => {
             window.removeEventListener('messagesMarkedAsRead', handleMessagesMarkedAsRead as EventListener);
+            window.removeEventListener('newMessageReceived', handleNewMessage as EventListener);
+            window.removeEventListener('userJoinedConversation', handleUserJoinedConversation as EventListener);
         };
-    }, [conversationId, markMessagesAsReadStore]);
+    }, [conversationId, markMessagesAsReadStore, markMessagesAsRead, currentUser?.id]);
 
 
     useEffect(() => {
@@ -277,14 +314,15 @@ export function MessageList({ conversationId, partnerName, partnerAvatar, onRepl
         return /(\.png|\.jpe?g|\.gif|\.bmp|\.webp|\.avif)(\?.*)?$/i.test(url);
     }, []);
 
-    // Render read status indicator for own messages
+    // Render read status indicator for messages
     const renderReadStatus = useCallback((message: Message) => {
-        if (!isOwnMessage(message)) return null;
+        const own = isOwnMessage(message);
 
+        // Show status for both own and other's messages
         return (
             <div className="flex items-center gap-1 mt-1">
-                {message.isRead ? (
-                    <div title="Đã đọc">
+                {message.isRead === true ? (
+                    <div title="Đã xem">
                         <CheckCheck className="h-3 w-3 text-blue-500" />
                     </div>
                 ) : (

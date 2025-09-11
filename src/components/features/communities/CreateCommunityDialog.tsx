@@ -66,7 +66,7 @@ export function CreateCommunityDialog({ open, onOpenChange, onCommunityCreated }
             const response = await createGroup({
                 groupName: name.trim(),
                 description: description.trim() || "",
-                groupType: "Community",
+                groupType: "community",
                 groupAvatarUrl: avatarPreview || ""
             });
 

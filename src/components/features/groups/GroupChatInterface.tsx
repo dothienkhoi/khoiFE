@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { MessageCircle, Search, Phone, Video, Users, Settings, Lock, Globe, Info } from "lucide-react";
+import { MessageCircle, Search, Phone, Video, Users, Settings, Lock, Globe, Info, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -10,14 +10,14 @@ import { ChatInput } from "../chat/ChatInput";
 import { ReplyPreview } from "../boback/ReplyPreview";
 import { useCustomerStore } from "@/store/customerStore";
 import { useAuthStore } from "@/store/authStore";
-import { sendGroupMessage, uploadFilesToGroup } from "@/lib/customer-api-client";
+import { sendGroupMessage, uploadFilesToGroup, getGroupDetails } from "@/lib/customer-api-client";
 import { Message } from "@/types/customer.types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { WelcomeScreen } from "../welcome/WelcomeScreen";
 import { useChatHub } from "@/components/providers/ChatHubProvider";
 import { getMessagePreview } from "@/lib/utils/messageUtils";
 import { QuickGroupDialog } from "./QuickGroupDialog";
+import { ExploreGroupsPanel } from "./ExploreGroupsPanel";
 
 interface GroupChatInterfaceProps {
     groupId?: string;
@@ -27,9 +27,11 @@ interface GroupChatInterfaceProps {
     groupType?: "Public" | "Private" | "Community";
     memberCount?: number;
     description?: string;
+    onBackToExplore?: () => void;
+    onGroupLeft?: () => void; // Callback khi rời khỏi nhóm
 }
 
-export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType, memberCount, description }: GroupChatInterfaceProps) {
+export function GroupChatInterface({ groupId, conversationId, groupName, groupAvatar, groupType, memberCount, description, onBackToExplore, onGroupLeft }: GroupChatInterfaceProps) {
     const { addMessage, updateMessage, updateConversation } = useCustomerStore();
     const { user: currentUser } = useAuthStore();
     const { isConnected: isChatHubConnected } = useChatHub();
@@ -37,9 +39,40 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
     const [isUploading, setIsUploading] = useState(false);
     const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [displayMemberCount, setDisplayMemberCount] = useState<number | undefined>(memberCount);
     const [isInfoOpen, setIsInfoOpen] = useState(false);
+    const [showExplore, setShowExplore] = useState(false);
+
+    // Local state for group info that can be updated in real-time
+    const [currentGroupName, setCurrentGroupName] = useState(groupName);
+    const [currentDescription, setCurrentDescription] = useState(description);
 
     const actualConversationId = conversationId || (groupId ? Number(groupId) : null);
+
+    // When the selected group changes (from sidebar), exit Explore view and update local state
+    useEffect(() => {
+        setShowExplore(false);
+        setCurrentGroupName(groupName);
+        setCurrentDescription(description);
+    }, [groupId, conversationId, groupName, description]);
+
+    // Live update header info when group info changes elsewhere
+    useEffect(() => {
+        const handler = (event: CustomEvent) => {
+            const { groupId: changedId, groupName: newName, description: newDesc, avatarUrl: newAvatar } = event.detail || {};
+            if (!groupId || changedId !== groupId) return;
+            if (newName) {
+                setCurrentGroupName(newName);
+            }
+            if (newDesc !== undefined) {
+                setCurrentDescription(newDesc);
+            }
+            // Note: We don't update groupAvatar here as it's passed as prop from parent
+            // The parent (GroupsPage) should handle avatar updates through its state
+        };
+        window.addEventListener('groupInfoUpdated', handler as EventListener);
+        return () => window.removeEventListener('groupInfoUpdated', handler as EventListener);
+    }, [groupId]);
 
     // Reset unread count when entering group chat
     const resetUnreadCount = () => {
@@ -56,6 +89,28 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
             resetUnreadCount();
         }
     }, [actualConversationId]);
+
+    // Enrich member count from group details if missing or equal to 1 (fallback)
+    useEffect(() => {
+        const fetchMemberCount = async () => {
+            if (!groupId) return;
+            const isGuid = /^[0-9a-fA-F-]{36}$/.test(groupId);
+            if (!isGuid) return;
+            if (typeof memberCount === 'number' && memberCount > 1) {
+                setDisplayMemberCount(memberCount);
+                return;
+            }
+            try {
+                const res = await getGroupDetails(groupId);
+                if (res?.success && typeof res.data?.memberCount === 'number') {
+                    setDisplayMemberCount(res.data.memberCount);
+                }
+            } catch (_) {
+                // ignore
+            }
+        };
+        fetchMemberCount();
+    }, [groupId, memberCount]);
 
     // Generate default description based on group type
     const getDefaultDescription = (groupType?: string, groupName?: string): string => {
@@ -197,18 +252,34 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
         }
     }, [handleSendText, handleSendFiles]);
 
-    // If no group is selected, show welcome screen
-    if (!groupId || !groupName) {
-        return (
-            <WelcomeScreen
-                userName={currentUser?.fullName || "Người dùng"}
-                onNewChat={() => {
-                    // TODO: Implement new group functionality
-                    console.log('New group clicked');
-                }}
-                type="group"
-            />
-        );
+    // Reset explore mode when group changes
+    useEffect(() => {
+        setShowExplore(false);
+    }, [groupId]);
+
+    // Show Explore when toggled
+    // Explore view removed
+
+    // Handle group join callback
+    const handleGroupJoin = useCallback((joinedGroupId: string) => {
+        console.log(`🎉 Group joined: ${joinedGroupId}`);
+        // Trigger refresh of group list in sidebar
+        // This will be handled by the parent component
+        if (onBackToExplore) {
+            // Small delay to ensure API has processed the join
+            setTimeout(() => {
+                onBackToExplore();
+            }, 500);
+        }
+    }, [onBackToExplore]);
+
+    // If no group is selected, render empty state (no welcome screen)
+    if (showExplore) {
+        return <ExploreGroupsPanel onJoin={handleGroupJoin} />;
+    }
+
+    if (!groupId || !currentGroupName) {
+        return <ExploreGroupsPanel onJoin={handleGroupJoin} />;
     }
 
     const groupTypeInfo = getGroupTypeInfo(groupType);
@@ -221,15 +292,18 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                 <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
+                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { onBackToExplore?.(); setShowExplore(true); }} title="Quay lại Khám Phá">
+                                <ArrowLeft className="h-4 w-4" />
+                            </Button>
                             <Avatar className="h-10 w-10">
                                 <AvatarImage src={groupAvatar} />
                                 <AvatarFallback className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] text-white font-semibold">
-                                    {groupName.charAt(0).toUpperCase()}
+                                    {currentGroupName.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <h2 className="font-semibold text-gray-900 dark:text-white">{groupName}</h2>
+                                    <h2 className="font-semibold text-gray-900 dark:text-white">{currentGroupName}</h2>
                                     <Badge
                                         variant="secondary"
                                         className={cn(
@@ -245,11 +319,11 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                                 <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                                     <span className="flex items-center gap-1">
                                         <Users className="w-3 h-3" />
-                                        {memberCount || 1} thành viên
+                                        {(typeof displayMemberCount === 'number' && displayMemberCount > 0 ? displayMemberCount : 1)} thành viên
                                     </span>
                                     <span>•</span>
                                     <span className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                                        {description || getDefaultDescription(groupType, groupName)}
+                                        {currentDescription || getDefaultDescription(groupType, currentGroupName)}
                                     </span>
                                 </div>
                             </div>
@@ -265,9 +339,6 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
                                 <Video className="h-4 w-4" />
                             </Button>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                                <Users className="h-4 w-4" />
-                            </Button>
                             <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setIsInfoOpen(true)} title="Thông tin nhóm">
                                 <Info className="h-4 w-4" />
                             </Button>
@@ -280,7 +351,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                 <div className="flex-1 overflow-hidden min-h-0">
                     <MessageList
                         conversationId={actualConversationId!}
-                        partnerName={groupName}
+                        partnerName={currentGroupName}
                         partnerAvatar={groupAvatar}
                         onReplyToMessage={setReplyToMessage}
                         chatType="group"
@@ -296,6 +367,7 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                         placeholder="Nhập tin nhắn..."
                         replyTo={replyToMessage}
                         onCancelReply={() => setReplyToMessage(null)}
+                        groupId={groupId}
                     />
                 </div>
             </div>
@@ -304,11 +376,16 @@ export function GroupChatInterface({ groupId, conversationId, groupName, groupAv
                 onOpenChange={setIsInfoOpen}
                 group={{
                     groupId: groupId!,
-                    groupName: groupName || "Nhóm",
-                    description: description,
+                    groupName: currentGroupName || "Nhóm",
+                    description: currentDescription,
                     avatarUrl: groupAvatar,
                     groupType: groupType,
                     memberCount: memberCount
+                }}
+                onGroupLeft={() => {
+                    // Khi rời khỏi nhóm, quay về explore và refresh
+                    onBackToExplore?.();
+                    onGroupLeft?.();
                 }}
             />
         </>

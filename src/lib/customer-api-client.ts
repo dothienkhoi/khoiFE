@@ -475,7 +475,7 @@ export const getGroups = async () => {
 export const createGroup = async (data: {
     groupName: string;
     description?: string;
-    groupType: "Public" | "Private";
+    groupType: "Public" | "Private" | "community";
     groupAvatarUrl?: string;
 }) => {
     try {
@@ -521,6 +521,18 @@ export const updateGroup = async (
     };
     if (typeof data.isPrivate === 'boolean') payload.isPrivate = data.isPrivate;
 
+    const response = await customerApiClient.put<CustomerApiResponse<any>>(
+        `/groups/${groupId}`,
+        payload
+    );
+    return response.data;
+};
+
+// Update group info (name, description) with canonical fields expected by API
+export const updateGroupInfo = async (
+    groupId: string,
+    payload: { groupName: string; description?: string | null }
+) => {
     const response = await customerApiClient.put<CustomerApiResponse<any>>(
         `/groups/${groupId}`,
         payload
@@ -591,12 +603,6 @@ export const joinGroup = async (groupId: string) => {
     return response.data;
 };
 
-export const leaveGroup = async (groupId: string) => {
-    const response = await customerApiClient.post<CustomerApiResponse<boolean>>(
-        `/groups/${groupId}/leave`
-    );
-    return response.data;
-};
 
 // Admin cuối cùng: chuyển quyền cho thành viên mới và rời nhóm
 export const transferAndLeaveGroup = async (groupId: string, newAdminUserId: string) => {
@@ -630,15 +636,55 @@ export const getGroupMembers = async (groupId: string) => {
 };
 
 // Public groups listing (searchable, paginated)
-export const getPublicGroups = async (pageNumber: number = 1, pageSize: number = 20, searchTerm?: string) => {
+// getPublicGroups removed per request
+export const getPublicGroups = async (
+    pageNumber: number = 1,
+    pageSize: number = 20,
+    searchTerm?: string
+) => {
     const params = new URLSearchParams();
-    params.append("pageNumber", String(pageNumber));
-    params.append("pageSize", String(pageSize));
-    if (searchTerm && searchTerm.trim()) params.append("searchTerm", searchTerm.trim());
+    params.append("PageNumber", String(pageNumber));
+    params.append("PageSize", String(pageSize));
+    if (searchTerm && searchTerm.trim()) params.append("SearchTerm", searchTerm.trim());
     const response = await customerApiClient.get<CustomerApiResponse<{
-        items: Array<{ groupId: string; groupName: string; description: string; groupAvatarUrl?: string | null; memberCount?: number }>;
+        items: Array<{ groupId?: string; groupID?: string; id?: string; groupName: string; description?: string; groupDescription?: string; groupAvatarUrl?: string | null; avatarUrl?: string | null; memberCount?: number }>;
         pageNumber: number; totalPages: number; totalRecords: number;
     }>>(`/groups/public?${params.toString()}`);
+    return response.data;
+};
+
+// Join a public group
+export const joinPublicGroup = async (groupId: string) => {
+    const response = await customerApiClient.post<CustomerApiResponse<null>>(`/groups/${groupId}/join`);
+    return response.data;
+};
+
+// Leave a group
+export const leaveGroup = async (groupId: string) => {
+    const response = await customerApiClient.post<CustomerApiResponse<null>>(`/groups/${groupId}/leave`);
+    return response.data;
+};
+
+// Get partner details of a direct conversation
+export const getConversationPartner = async (conversationId: number) => {
+    const response = await customerApiClient.get<CustomerApiResponse<any>>(`/conversations/${conversationId}/partner`);
+    return response.data;
+};
+
+// Get member suggestions for @mention
+export const getMentionSuggestions = async (groupId: string, search?: string) => {
+    const params = new URLSearchParams();
+    if (search && search.trim()) {
+        params.append("search", search.trim());
+    }
+
+    const url = `/groups/${groupId}/mention-suggestions${params.toString() ? `?${params.toString()}` : ''}`;
+    const response = await customerApiClient.get<CustomerApiResponse<Array<{
+        userId: string;
+        fullName: string;
+        avatarUrl?: string | null;
+        presenceStatus?: string;
+    }>>>(url);
     return response.data;
 };
 
@@ -648,10 +694,13 @@ export const getMyGroupsPaged = async (pageNumber: number = 1, pageSize: number 
     params.append("pageNumber", String(pageNumber));
     params.append("pageSize", String(pageSize));
     if (searchTerm && searchTerm.trim()) params.append("searchTerm", searchTerm.trim());
+
+    const url = `/me/groups?${params.toString()}`;
+
     const response = await customerApiClient.get<CustomerApiResponse<{
         items: Array<{ conversationId: number; groupId: string; groupType?: string; groupName: string; description?: string; avatarUrl?: string | null }>;
         pageNumber: number; pageSize: number; totalRecords: number; totalPages: number;
-    }>>(`/me/groups?${params.toString()}`);
+    }>>(url);
     return response.data;
 };
 
@@ -819,6 +868,8 @@ export const updateUserProfile = async (data: Partial<{
 
 export const updateUserAvatar = async (avatarFile: File) => {
     const formData = new FormData();
+    // Backend expects the field name to be "file" per Swagger
+
     formData.append("file", avatarFile);
 
     const response = await customerApiClient.put<CustomerApiResponse<{ avatarUrl: string }>>(

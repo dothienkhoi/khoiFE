@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
@@ -30,6 +30,7 @@ export function IncomingCallDialog({
     const [isMuted, setIsMuted] = useState(false);
     const [isVideoOff, setIsVideoOff] = useState(false);
     const [callStatus, setCallStatus] = useState<'ringing' | 'connecting' | 'connected' | 'ended'>('ringing');
+    const [avatarError, setAvatarError] = useState(false);
 
     // Auto-reject after 30 seconds if not answered
     useEffect(() => {
@@ -72,13 +73,18 @@ export function IncomingCallDialog({
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-md bg-gray-900 text-white border-gray-700">
+                <DialogTitle className="sr-only">Cuộc gọi đến từ {callerName}</DialogTitle>
                 <div className="flex flex-col items-center space-y-6 p-6">
                     {/* Caller Info */}
                     <div className="text-center">
                         <Avatar className="h-24 w-24 mb-4 ring-4 ring-green-500/20">
-                            <AvatarImage src={callerAvatar} />
+                            <AvatarImage
+                                src={callerAvatar}
+                                onError={() => setAvatarError(true)}
+                                onLoad={() => setAvatarError(false)}
+                            />
                             <AvatarFallback className="bg-gradient-to-r from-green-500 to-blue-600 text-white text-2xl font-bold">
-                                {callerName.split(' ').map(n => n[0]).join('')}
+                                {callerName?.split(' ').map(n => n[0]).join('') || 'U'}
                             </AvatarFallback>
                         </Avatar>
 

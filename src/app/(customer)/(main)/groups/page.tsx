@@ -21,14 +21,40 @@ export default function GroupsPage() {
     } = useCustomerStore();
 
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     useEffect(() => {
         setActiveNavItem('groups');
     }, [setActiveNavItem]);
 
+    // Listen for group info updates to update selectedGroup state
+    useEffect(() => {
+        const handleGroupInfoUpdated = (event: CustomEvent) => {
+            const { groupId, groupName, description, avatarUrl } = event.detail || {};
+            if (!groupId || !selectedGroup || selectedGroup.groupId !== groupId) return;
+
+            setSelectedGroup(prev => prev ? {
+                ...prev,
+                groupName: groupName ?? prev.groupName,
+                description: description ?? prev.description,
+                avatarUrl: avatarUrl ?? prev.avatarUrl
+            } : null);
+        };
+
+        window.addEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+        return () => window.removeEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+    }, [selectedGroup]);
+
     // Handle group selection
     const handleGroupSelect = (group: Group) => {
         setSelectedGroup(group);
+    };
+
+    const handleBackToExplore = () => {
+        // Clear current selection so user can click the same conversation again later
+        setSelectedGroup(null);
+        // Trigger refresh of group list
+        setRefreshTrigger(prev => prev + 1);
     };
 
     return (
@@ -38,6 +64,7 @@ export default function GroupsPage() {
                 <GroupSidebar
                     onGroupSelect={handleGroupSelect}
                     selectedGroupId={selectedGroup?.groupId}
+                    refreshTrigger={refreshTrigger}
                 />
             </div>
 
@@ -50,6 +77,11 @@ export default function GroupsPage() {
                     groupAvatar={selectedGroup?.avatarUrl || undefined}
                     groupType={selectedGroup?.groupType}
                     description={selectedGroup?.description}
+                    onBackToExplore={handleBackToExplore}
+                    onGroupLeft={() => {
+                        // Khi rời khỏi nhóm, refresh danh sách nhóm
+                        setRefreshTrigger(prev => prev + 1);
+                    }}
                 />
             </div>
         </div>

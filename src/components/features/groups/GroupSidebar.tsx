@@ -25,9 +25,10 @@ interface Group {
 interface GroupSidebarProps {
     onGroupSelect: (group: Group) => void;
     selectedGroupId?: string;
+    refreshTrigger?: number;
 }
 
-export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarProps) {
+export function GroupSidebar({ onGroupSelect, selectedGroupId, refreshTrigger }: GroupSidebarProps) {
     const [groups, setGroups] = useState<Group[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -49,9 +50,13 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                 setIsLoadingMore(true);
             }
 
-            const res = await getMyGroupsPaged(page, pageSize, searchTerm);
+            // Don't send searchTerm to API since server doesn't filter properly
+            // We'll do client-side filtering instead
+            const res = await getMyGroupsPaged(page, pageSize);
+
             if (res.success && res.data) {
                 const items = res.data.items || [];
+
                 const mapped: Group[] = items.map((g: any) => ({
                     groupId: g.groupId,
                     groupName: g.groupName,
@@ -61,9 +66,10 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                     lastMessageTimestamp: undefined,
                     unreadCount: 0,
                     groupType: (g.groupType?.toLowerCase() === "private" ? "Private" : "Public"),
-                    memberCount: undefined,
+                    memberCount: typeof g.memberCount === "number" ? g.memberCount : undefined,
                     conversationId: g.conversationId
                 }));
+
                 if (append) setGroups(prev => [...prev, ...mapped]); else setGroups(mapped);
                 setTotalRecords(res.data.totalRecords || mapped.length);
                 setHasMorePages((res.data.pageNumber || page) < (res.data.totalPages || 1));
@@ -79,7 +85,7 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
             setIsLoading(false);
             setIsLoadingMore(false);
         }
-    }, [pageSize]);
+    }, [pageSize]); // Remove searchTerm dependency since we're not using server-side search
 
     // Function to manually add new group to top of list
     const addNewGroupToTop = useCallback((newGroup: any) => {
@@ -100,12 +106,77 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
         setTotalRecords(prev => prev + 1);
     }, []);
 
+    // Refresh groups when refreshTrigger changes
+    useEffect(() => {
+        if (refreshTrigger && refreshTrigger > 0) {
+            fetchGroups(1, false);
+        }
+    }, [refreshTrigger, fetchGroups]);
+
     // Load more groups when scrolling to bottom
     const loadMoreGroups = useCallback(() => {
         if (!isLoadingMore && hasMorePages) {
             fetchGroups(currentPage + 1, true);
         }
     }, [currentPage, hasMorePages, isLoadingMore, fetchGroups]);
+
+    // Load all pages for comprehensive search
+    const loadAllPagesForSearch = useCallback(async () => {
+        try {
+            setIsLoading(true);
+
+            // First, get the total number of pages
+            const firstPageRes = await getMyGroupsPaged(1, pageSize);
+            if (!firstPageRes.success || !firstPageRes.data) {
+                return;
+            }
+
+            const totalPages = firstPageRes.data.totalPages || 1;
+            const totalRecords = firstPageRes.data.totalRecords || 0;
+
+            if (totalPages <= 1) {
+                // Only one page, just use the data we already have
+                setIsLoading(false);
+                return;
+            }
+
+            // Load all remaining pages
+            const allGroups = [...(firstPageRes.data.items || [])];
+
+            for (let page = 2; page <= totalPages; page++) {
+                const pageRes = await getMyGroupsPaged(page, pageSize);
+
+                if (pageRes.success && pageRes.data) {
+                    allGroups.push(...(pageRes.data.items || []));
+                }
+            }
+
+            // Transform all groups
+            const mapped: Group[] = allGroups.map((g: any) => ({
+                groupId: g.groupId,
+                groupName: g.groupName,
+                description: g.description || "",
+                avatarUrl: g.avatarUrl || null,
+                lastMessagePreview: "",
+                lastMessageTimestamp: undefined,
+                unreadCount: 0,
+                groupType: (g.groupType?.toLowerCase() === "private" ? "Private" : "Public"),
+                memberCount: typeof g.memberCount === "number" ? g.memberCount : undefined,
+                conversationId: g.conversationId
+            }));
+
+            // Update state with all groups
+            setGroups(mapped);
+            setTotalRecords(totalRecords);
+            setHasMorePages(false); // No more pages to load
+            setCurrentPage(totalPages);
+
+        } catch (error) {
+            console.error("Failed to load all pages for search:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [pageSize]);
 
     // Handle scroll for infinite loading
     const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
@@ -117,10 +188,44 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
         }
     }, [hasMorePages, isLoadingMore, loadMoreGroups]);
 
-    // Initial load
+    // Handle search term changes with debounce
+    // Load ALL pages when searching to ensure we can find groups from any page
+    useEffect(() => {
+        const timeoutId = setTimeout(async () => {
+            if (searchTerm && searchTerm.trim()) {
+                // Load all pages to ensure we can search through all groups
+                await loadAllPagesForSearch();
+            } else {
+                // If no search term, reset to show all groups
+                setCurrentPage(1);
+                setHasMorePages(true);
+                fetchGroups(1, false);
+            }
+        }, searchTerm ? 300 : 0);
+
+        return () => clearTimeout(timeoutId);
+    }, [searchTerm]);
+
+    // Initial load only when component mounts
     useEffect(() => {
         fetchGroups(1, false);
-    }, [fetchGroups]);
+    }, []); // Empty dependency array - only run on mount
+
+    // React to group info updates broadcasted by dialogs
+    useEffect(() => {
+        const handleGroupInfoUpdated = (event: CustomEvent) => {
+            const { groupId, groupName, description, avatarUrl } = event.detail || {};
+            if (!groupId) return;
+            setGroups(prev => prev.map(g => g.groupId === groupId ? {
+                ...g,
+                groupName: groupName ?? g.groupName,
+                description: description ?? g.description,
+                avatarUrl: avatarUrl ?? g.avatarUrl
+            } : g));
+        };
+        window.addEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+        return () => window.removeEventListener('groupInfoUpdated', handleGroupInfoUpdated as EventListener);
+    }, []);
 
     // Listen for real-time message updates (only update unread count, keep description)
     useEffect(() => {
@@ -168,13 +273,16 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
         };
     }, [selectedGroupId]);
 
-    // Filter groups based on search term with safe null checks
-    const filteredGroups = Array.isArray(groups) ? groups.filter(group =>
-        group &&
-        group.groupName &&
-        (safeToLowerCase(group.groupName).includes(safeToLowerCase(searchTerm)) ||
-            safeToLowerCase(group.description || "").includes(safeToLowerCase(searchTerm)))
-    ) : [];
+    // Client-side filtering as backup since server doesn't filter properly
+    const filteredGroups = searchTerm && searchTerm.trim()
+        ? groups.filter(group =>
+            group &&
+            group.groupName &&
+            (group.groupName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (group.description || "").toLowerCase().includes(searchTerm.toLowerCase()))
+        )
+        : groups;
+
 
     // Handle group selection
     const handleGroupSelect = (group: Group) => {
@@ -238,6 +346,8 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10 pr-12 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 focus:border-[#ad46ff] focus:ring-[#ad46ff]/20 transition-all duration-300"
                     />
+
+
                 </div>
             </div>
 
@@ -278,7 +388,14 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                         {/* End of list indicator */}
                         {!hasMorePages && filteredGroups.length > 0 && (
                             <div className="text-center py-4 text-sm text-gray-500 dark:text-gray-400">
-                                Đã hiển thị tất cả nhóm ({totalRecords} nhóm)
+                                {searchTerm ? (
+                                    <div>
+                                        <p>Đã tìm kiếm trong tất cả nhóm</p>
+                                        <p className="text-xs mt-1">Tìm thấy {filteredGroups.length} nhóm cho "{searchTerm}" từ {totalRecords} nhóm tổng cộng</p>
+                                    </div>
+                                ) : (
+                                    `Đã hiển thị tất cả nhóm của bạn (${totalRecords} nhóm)`
+                                )}
                             </div>
                         )}
                     </div>
@@ -292,19 +409,10 @@ export function GroupSidebar({ onGroupSelect, selectedGroupId }: GroupSidebarPro
                         </h3>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
                             {searchTerm
-                                ? "Thử tìm kiếm với từ khóa khác"
-                                : "Tạo nhóm mới hoặc tìm kiếm nhóm để tham gia"
+                                ? `Thử tìm kiếm với từ khóa khác cho "${searchTerm}"`
+                                : "Tạo nhóm mới hoặc tham gia nhóm từ Khám Phá"
                             }
                         </p>
-                        {!searchTerm && (
-                            <Button
-                                onClick={() => setIsCreateGroupOpen(true)}
-                                className="bg-gradient-to-r from-[#ad46ff] to-[#1447e6] hover:from-[#ad46ff]/90 hover:to-[#1447e6]/90 text-white"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Tạo nhóm đầu tiên
-                            </Button>
-                        )}
                     </div>
                 )}
             </div>
