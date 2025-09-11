@@ -10,6 +10,7 @@ import { VideoCallProvider } from "@/contexts/VideoCallContext";
 import { VideoCallHubProvider } from "./providers/VideoCallHubProvider";
 import { VideoCallDialogs } from "@/components/features/video-call/VideoCallDialogs";
 import { useState } from "react";
+import { CustomerSignalRProvider } from "./providers/CustomerSignalRProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
@@ -23,14 +24,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <ProfileProvider>
-          <ChatHubProvider>
-            <VideoCallProvider>
-              <VideoCallHubProvider>
-                {children}
-                <VideoCallDialogs />
-              </VideoCallHubProvider>
-            </VideoCallProvider>
-          </ChatHubProvider>
+          <CustomerSignalRProvider>
+            <ChatHubProvider>
+              <VideoCallProvider>
+                <VideoCallHubProvider>
+                  {children}
+                  <VideoCallDialogs />
+                </VideoCallHubProvider>
+              </VideoCallProvider>
+            </ChatHubProvider>
+          </CustomerSignalRProvider>
         </ProfileProvider>
         <Toaster
           richColors

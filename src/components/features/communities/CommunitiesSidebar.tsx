@@ -116,6 +116,26 @@ export function CommunitiesSidebar({ selectedCommunity, onCommunitySelect }: Com
         };
     }, [selectedCommunity, communities, onCommunitySelect]);
 
+    // Live update a single community when settings dialog reports changes
+    useEffect(() => {
+        const handleGroupUpdated = (evt: any) => {
+            const { groupId, groupName, description, avatarUrl } = evt.detail || {};
+            if (!groupId) return;
+            setCommunities(prev => prev.map(c => {
+                if (c.id !== groupId) return c;
+                const updated: Community = {
+                    ...c,
+                    name: groupName ?? c.name,
+                    description: description ?? c.description,
+                    avatarUrl: avatarUrl ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}ts=${Date.now()}` : c.avatarUrl,
+                };
+                return updated;
+            }));
+        };
+        window.addEventListener('group:updated', handleGroupUpdated as EventListener);
+        return () => window.removeEventListener('group:updated', handleGroupUpdated as EventListener);
+    }, []);
+
     const filteredCommunities = communities.filter(community =>
         (community.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (community.description || "").toLowerCase().includes(searchTerm.toLowerCase())
@@ -133,8 +153,13 @@ export function CommunitiesSidebar({ selectedCommunity, onCommunitySelect }: Com
             <div className="p-4 border-b border-gray-200 dark:border-gray-800">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Cộng đồng</h2>
                 <div className="relative mb-4">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <Input placeholder="Tìm kiếm cộng đồng..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                        placeholder="Tìm kiếm cộng đồng..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                    />
                 </div>
                 <Button onClick={() => setShowCreateDialog(true)} className="w-full" size="sm">
                     <Plus className="h-4 w-4 mr-2" /> Tạo cộng đồng mới

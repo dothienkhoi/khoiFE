@@ -35,7 +35,7 @@ import { useRouter } from "next/navigation";
 
 export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const router = useRouter();
-  const { notifications, setNotifications, addNotification, unreadCount } = useCustomerStore();
+  const { notifications, setNotifications, addNotification, unreadCount, setUnreadCount } = useCustomerStore();
   const store = useCustomerStore.getState();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +44,17 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const [invitations, setInvitations] = useState<GroupInvitation[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
 
+  // SignalR handlers for notifications hub
+  useEffect(() => {
+    const handleUnreadUpdate = (count: number) => {
+      setUnreadCount(count);
+    };
+    // Attach global handler if SignalR provider dispatches events
+    const onSignal = (e: any) => handleUnreadUpdate(e.detail?.count ?? 0);
+    window.addEventListener('notifications:unread', onSignal as EventListener);
+    return () => window.removeEventListener('notifications:unread', onSignal as EventListener);
+  }, [setUnreadCount]);
+
   // Load notifications and invitations when dropdown opens
   useEffect(() => {
     if (isOpen) {
@@ -51,6 +62,10 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
         loadNotifications();
       }
       loadInvitations();
+    } else {
+      // đảm bảo tắt spinner khi đóng dropdown
+      setIsLoading(false);
+      setIsLoadingInvitations(false);
     }
   }, [isOpen]);
 
@@ -71,8 +86,11 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
 
     setIsLoading(true);
     try {
+      // safety timer: tránh spinner quay vô hạn nếu request kẹt
+      const safety = setTimeout(() => setIsLoading(false), 12000);
       // Load only 5 notifications for dropdown
       const response = await getNotifications(pageNumber, 5);
+      clearTimeout(safety);
 
       if (response.success) {
         if (pageNumber === 1) {
@@ -204,7 +222,7 @@ export function NotificationDropdown({ size = 'md' }: { size?: 'sm' | 'md' }) {
 
   return (
     <>
-      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenu open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) { setIsLoading(false); setIsLoadingInvitations(false); } }}>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className={`relative ${size === 'sm' ? 'h-8 w-8' : 'h-10 w-10'} rounded-lg bg-transparent hover:bg-[#1447e6]/20`}>
             <Bell className="h-5 w-5 text-[#1447e6]" />

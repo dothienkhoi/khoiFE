@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from "react";
-import { HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
+import { HubConnection, HubConnectionBuilder, LogLevel, HttpTransportType } from "@microsoft/signalr";
 import { useAuthStore } from "@/store/authStore";
 import { useCustomerStore } from "@/store/customerStore";
 import { toast } from "sonner";
@@ -48,12 +48,12 @@ export function ChatHubProvider({ children }: { children: ReactNode }) {
         const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://localhost:7007";
         const hubUrl = `${baseUrl}/hubs/chatHub`;
 
-        const urlWithToken = accessToken ? `${hubUrl}?access_token=${accessToken}` : hubUrl;
-
         const hubConnection = new HubConnectionBuilder()
-            .withUrl(urlWithToken, {
+            .withUrl(hubUrl, {
                 withCredentials: true,
+                accessTokenFactory: () => accessToken || "",
                 skipNegotiation: false,
+                transport: HttpTransportType.WebSockets,
             })
             .withAutomaticReconnect({
                 nextRetryDelayInMilliseconds: (retryContext) => {

@@ -42,6 +42,8 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
     const [editDescription, setEditDescription] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [nameError, setNameError] = useState<string>("");
+    const [descError, setDescError] = useState<string>("");
     const [members, setMembers] = useState<GroupMember[]>([]);
     const [isLoadingMembers, setIsLoadingMembers] = useState(false);
     const [groupDetails, setGroupDetails] = useState<any>(null);
@@ -123,16 +125,46 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
     const handleSaveChanges = async () => {
         if (!community) return;
 
+        // Basic validation
+        const nameTrim = editName.trim();
+        const descTrim = editDescription.trim();
+        if (!nameTrim) {
+            setNameError("Tên cộng đồng không được để trống");
+            toast.error("Vui lòng nhập tên cộng đồng");
+            return;
+        }
+        if (!descTrim) {
+            setDescError("Mô tả không được để trống");
+            toast.error("Vui lòng nhập mô tả");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const response = await updateGroup(community.id, {
-                name: editName,
-                description: editDescription
+                name: nameTrim,
+                description: descTrim
             });
 
             if (response.success) {
-                toast.success("Cập nhật cộng đồng thành công!");
-                setIsEditing(false);
+            toast.success("Cập nhật cộng đồng thành công!");
+                // Cập nhật ngay UI trong dialog
+                setGroupDetails((prev: any) => prev ? { ...prev, groupName: nameTrim, description: descTrim } : { groupName: nameTrim, description: descTrim });
+            setIsEditing(false);
+                // Thông báo cho sidebar/ các view khác làm mới
+                window.dispatchEvent(new CustomEvent('communities:refresh', {
+                    detail: {
+                        groupId: community.id,
+                        updated: { groupName: nameTrim, description: descTrim }
+                    }
+                }));
+                window.dispatchEvent(new CustomEvent('group:updated', {
+                    detail: {
+                        groupId: community.id,
+                        groupName: nameTrim,
+                        description: descTrim
+                    }
+                }));
                 // Update community name in parent component if needed
                 // You might want to add a callback prop to notify parent component
             } else {
@@ -344,7 +376,7 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden">
+            <DialogContent className="sm:max-w-2xl w-[680px] max-h-[85vh] overflow-hidden">
                 <DialogHeader>
                     <DialogTitle className="flex items-center space-x-2">
                         <Settings className="h-5 w-5" />
@@ -360,149 +392,151 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
                         <TabsTrigger value="invite">Thêm thành viên</TabsTrigger>
                     </TabsList>
 
+                    {/* Scrollable area to keep dialog size stable */}
+                    <div className="h-[60vh] overflow-y-auto pr-2">
                     {/* Tab: Chi tiết cộng đồng */}
                     <TabsContent value="details" className="space-y-4">
-                        {isLoadingDetails ? (
-                            <div className="flex items-center justify-center py-8">
-                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            {isLoadingDetails ? (
+                                <div className="flex items-center justify-center py-8">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                </div>
+                            ) : (
+                                <>
+                        <div className="flex items-center space-x-4">
+                            <Avatar className="h-20 w-20">
+                                            <AvatarImage src={groupDetails?.groupAvatarUrl || community.avatarUrl} />
+                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl">
+                                                {(groupDetails?.groupName || community.name).charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                            </Avatar>
+
+                            <div className="flex-1">
+                                            <h3 className="text-xl font-semibold">
+                                                {groupDetails?.groupName || community.name}
+                                            </h3>
+                                <p className="text-gray-600 dark:text-gray-400 mt-1">
+                                                {groupDetails?.description || community.description}
+                                            </p>
+                                </div>
                             </div>
-                        ) : (
-                            <>
-                                <div className="flex items-center space-x-4">
-                                    <Avatar className="h-20 w-20">
-                                        <AvatarImage src={groupDetails?.groupAvatarUrl || community.avatarUrl} />
-                                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl">
-                                            {(groupDetails?.groupName || community.name).charAt(0).toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
 
-                                    <div className="flex-1">
-                                        <h3 className="text-xl font-semibold">
-                                            {groupDetails?.groupName || community.name}
-                                        </h3>
-                                        <p className="text-gray-600 dark:text-gray-400 mt-1">
-                                            {groupDetails?.description || community.description}
-                                        </p>
-                                    </div>
-                                </div>
+                                    {/* Nút rời khỏi nhóm */}
+                                    <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleLeaveGroup}
+                                            className="w-full"
+                                        >
+                                            <LogOut className="h-4 w-4 mr-2" />
+                                            Rời khỏi nhóm
+                                        </Button>
+                        </div>
 
-                                {/* Nút rời khỏi nhóm */}
-                                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <Button
-                                        variant="destructive"
-                                        onClick={handleLeaveGroup}
-                                        className="w-full"
-                                    >
-                                        <LogOut className="h-4 w-4 mr-2" />
-                                        Rời khỏi nhóm
-                                    </Button>
-                                </div>
-
-                            </>
-                        )}
+                                </>
+                            )}
                     </TabsContent>
 
                     {/* Tab: Thành viên cộng đồng */}
                     <TabsContent value="members" className="space-y-4">
-                        <div className="space-y-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input
-                                    placeholder="Tìm kiếm thành viên..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10"
-                                />
+                            <div className="space-y-4">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                    <Input
+                                        placeholder="Tìm kiếm thành viên..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10"
+                                    />
+                                </div>
                             </div>
-                        </div>
                         <div className="space-y-3">
-                            {isLoadingMembers ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                                    <span className="ml-2 text-gray-500">Đang tải danh sách thành viên...</span>
-                                </div>
-                            ) : !Array.isArray(members) || filteredMembers.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
-                                    {searchTerm ? "Không tìm thấy thành viên nào" : "Chưa có thành viên nào"}
-                                </div>
-                            ) : (
-                                <ScrollArea className="h-64 w-full">
-                                    <div className="space-y-2 pr-4">
-                                        {filteredMembers.map((member) => (
-                                            <div key={member.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                <div className="flex items-center space-x-3">
-                                                    <Avatar className="h-10 w-10">
-                                                        <AvatarImage src={member.avatarUrl} />
-                                                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
-                                                            {member.fullName.charAt(0).toUpperCase()}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-
-                                                    <div>
-                                                        <p className="font-medium">{member.fullName}</p>
-                                                        {member.joinedAt && (
-                                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                                Tham gia {new Date(member.joinedAt).toLocaleDateString('vi-VN')}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-center space-x-2">
-                                                    <Badge variant={member.role.toLowerCase() === "admin" ? "default" : "secondary"}>
-                                                        {member.role.toLowerCase() === "admin" ? "Quản trị viên" : "Thành viên"}
-                                                    </Badge>
-
-                                                    {community.isAdmin && (
-                                                        <div className="flex items-center space-x-1">
-                                                            {/* Nút quản lý vai trò */}
-                                                            {member.role.toLowerCase() === "admin" ? (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleUpdateMemberRole(member.userId, "remove_admin_role")}
-                                                                    className="text-orange-600 hover:text-orange-700"
-                                                                    title="Xóa quyền admin"
-                                                                >
-                                                                    <Users className="h-4 w-4" />
-                                                                </Button>
-                                                            ) : (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleUpdateMemberRole(member.userId, "add_admin_role")}
-                                                                    className="text-blue-600 hover:text-blue-700"
-                                                                    title="Thêm quyền admin"
-                                                                >
-                                                                    <Users className="h-4 w-4" />
-                                                                </Button>
-                                                            )}
-
-                                                            {/* Nút xóa thành viên (chỉ cho member) */}
-                                                            {member.role.toLowerCase() !== "admin" && (
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleRemoveMember(member.userId)}
-                                                                    className="text-red-600 hover:text-red-700"
-                                                                    title="Xóa thành viên"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
+                                {isLoadingMembers ? (
+                                    <div className="flex items-center justify-center py-8">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                                        <span className="ml-2 text-gray-500">Đang tải danh sách thành viên...</span>
                                     </div>
-                                </ScrollArea>
-                            )}
+                                ) : !Array.isArray(members) || filteredMembers.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">
+                                        {searchTerm ? "Không tìm thấy thành viên nào" : "Chưa có thành viên nào"}
+                                    </div>
+                                ) : (
+                                    <ScrollArea className="h-64 w-full">
+                                        <div className="space-y-2 pr-4">
+                            {filteredMembers.map((member) => (
+                                                <div key={member.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                    <div className="flex items-center space-x-3">
+                                        <Avatar className="h-10 w-10">
+                                            <AvatarImage src={member.avatarUrl} />
+                                            <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                                                                {member.fullName.charAt(0).toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+
+                                        <div>
+                                                            <p className="font-medium">{member.fullName}</p>
+                                                            {member.joinedAt && (
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                Tham gia {new Date(member.joinedAt).toLocaleDateString('vi-VN')}
+                                            </p>
+                                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center space-x-2">
+                                                        <Badge variant={member.role.toLowerCase() === "admin" ? "default" : "secondary"}>
+                                                            {member.role.toLowerCase() === "admin" ? "Quản trị viên" : "Thành viên"}
+                                        </Badge>
+
+                                                        {community.isAdmin && (
+                                                            <div className="flex items-center space-x-1">
+                                                                {/* Nút quản lý vai trò */}
+                                                                {member.role.toLowerCase() === "admin" ? (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() => handleUpdateMemberRole(member.userId, "remove_admin_role")}
+                                                                        className="text-orange-600 hover:text-orange-700"
+                                                                        title="Xóa quyền admin"
+                                                                    >
+                                                                        <Users className="h-4 w-4" />
+                                                                    </Button>
+                                                                ) : (
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        onClick={() => handleUpdateMemberRole(member.userId, "add_admin_role")}
+                                                                        className="text-blue-600 hover:text-blue-700"
+                                                                        title="Thêm quyền admin"
+                                                                    >
+                                                                        <Users className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+
+                                                                {/* Nút xóa thành viên (chỉ cho member) */}
+                                                                {member.role.toLowerCase() !== "admin" && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                                        onClick={() => handleRemoveMember(member.userId)}
+                                                className="text-red-600 hover:text-red-700"
+                                                                        title="Xóa thành viên"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                                                )}
+                                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                )}
                         </div>
                     </TabsContent>
 
                     {/* Tab: Chỉnh sửa cộng đồng */}
-                    <TabsContent value="edit" className="space-y-4">
+                        <TabsContent value="edit" className="space-y-6">
                         {!isEditing ? (
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
@@ -512,21 +546,10 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
                                         Chỉnh sửa
                                     </Button>
                                 </div>
-
-                                <div className="space-y-3">
-                                    <div>
-                                        <Label className="text-sm font-medium">Tên cộng đồng</Label>
-                                        <p className="text-gray-900 dark:text-white">{community.name}</p>
-                                    </div>
-                                    <div>
-                                        <Label className="text-sm font-medium">Mô tả</Label>
-                                        <p className="text-gray-600 dark:text-gray-400">{community.description}</p>
-                                    </div>
-                                </div>
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur z-10 py-2">
                                     <h4 className="text-lg font-medium">Chỉnh sửa thông tin</h4>
                                     <div className="space-x-2">
                                         <Button
@@ -545,54 +568,81 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
                                     </div>
                                 </div>
 
-                                <div className="space-y-3">
+                                    <div className="space-y-5">
                                     <div>
-                                        <Label className="text-sm font-medium mb-3 block">Ảnh đại diện nhóm</Label>
-                                        <div className="flex items-center space-x-4">
-                                            <Avatar className="h-20 w-20">
-                                                <AvatarImage src={groupDetails?.groupAvatarUrl || community.avatarUrl} />
-                                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl">
-                                                    {(groupDetails?.groupName || community.name).charAt(0).toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex items-center space-x-2">
-                                                <input type="file" accept="image/*" id="group-avatar-input" className="hidden" onChange={async (e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (!file || !community) return;
-                                                    try {
-                                                        // Tùy chọn: upload staging để preview nhanh
+                                            <Label className="text-sm font-medium mb-2 block">Ảnh đại diện nhóm</Label>
+                                            <div className="flex items-center gap-4 flex-wrap">
+                                                <Avatar className="h-20 w-20">
+                                                    <AvatarImage src={groupDetails?.groupAvatarUrl || community.avatarUrl} />
+                                                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-2xl">
+                                                        {(groupDetails?.groupName || community.name).charAt(0).toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex items-center gap-2">
+                                                    <input type="file" accept="image/*" id="group-avatar-input" className="hidden" onChange={async (e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (!file || !community) return;
                                                         try {
-                                                            const tmp = await uploadStagingAvatar(file, 'group');
-                                                            if (tmp.success && tmp.data?.fileUrl) {
-                                                                // cập nhật preview tạm
-                                                                setGroupDetails((prev: any) => prev ? { ...prev, groupAvatarUrl: tmp.data.fileUrl } : prev);
-                                                            }
-                                                        } catch { /* ignore preview errors */ }
+                                                            // Tùy chọn: upload staging để preview nhanh
+                                                            try {
+                                                                const tmp = await uploadStagingAvatar(file, 'group');
+                                                                if (tmp.success && tmp.data?.fileUrl) {
+                                                                    // cập nhật preview tạm
+                                                                    setGroupDetails((prev: any) => prev ? { ...prev, groupAvatarUrl: tmp.data.fileUrl } : prev);
+                                                                }
+                                                            } catch { /* ignore preview errors */ }
 
-                                                        const res = await updateGroupAvatar(community.id, file);
-                                                        if (res.success) {
-                                                            toast.success('Cập nhật ảnh đại diện nhóm thành công!');
-                                                            await loadGroupDetails();
-                                                        } else {
-                                                            toast.error(res.message || 'Không thể cập nhật ảnh nhóm');
+                                                            const res = await updateGroupAvatar(community.id, file);
+                                                            if (res.success) {
+                                                                toast.success('Cập nhật ảnh đại diện nhóm thành công!');
+                                                                // Cập nhật ngay UI + phát sự kiện đồng bộ
+                                                                if (res.data?.avatarUrl) {
+                                                                    setGroupDetails((prev: any) => prev ? { ...prev, groupAvatarUrl: res.data.avatarUrl } : prev);
+                                                                    window.dispatchEvent(new CustomEvent('communities:refresh', {
+                                                                        detail: { groupId: community.id, updated: { avatarUrl: res.data.avatarUrl } }
+                                                                    }));
+                                                                    window.dispatchEvent(new CustomEvent('group:updated', {
+                                                                        detail: { groupId: community.id, avatarUrl: res.data.avatarUrl }
+                                                                    }));
+                                                                }
+                                                                await loadGroupDetails();
+                                                            } else {
+                                                                toast.error(res.message || 'Không thể cập nhật ảnh nhóm');
+                                                            }
+                                                        } catch (err) {
+                                                            handleApiError(err, 'Không thể cập nhật ảnh nhóm');
                                                         }
-                                                    } catch (err) {
-                                                        handleApiError(err, 'Không thể cập nhật ảnh nhóm');
-                                                    }
-                                                }} />
-                                                <Button variant="outline" size="sm" onClick={() => document.getElementById('group-avatar-input')?.click()}>
-                                                    Chọn ảnh
-                                                </Button>
+                                                    }} />
+                                                    <Button variant="outline" size="sm" onClick={() => document.getElementById('group-avatar-input')?.click()}>
+                                                        Chọn ảnh
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div>
+                                        <div className="space-y-2">
                                         <Label htmlFor="edit-name">Tên cộng đồng</Label>
-                                        <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                                        <Input
+                                            id="edit-name"
+                                            value={editName}
+                                                onChange={(e) => { setEditName(e.target.value); setNameError(""); }}
+                                                placeholder="Nhập tên cộng đồng"
+                                        />
+                                            {nameError && (
+                                                <p className="mt-1 text-sm text-red-500">{nameError}</p>
+                                            )}
                                     </div>
-                                    <div>
+                                        <div className="space-y-2">
                                         <Label htmlFor="edit-description">Mô tả</Label>
-                                        <Textarea id="edit-description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} />
+                                        <Textarea
+                                            id="edit-description"
+                                            value={editDescription}
+                                                onChange={(e) => { setEditDescription(e.target.value); setDescError(""); }}
+                                            rows={3}
+                                                placeholder="Nhập mô tả"
+                                        />
+                                            {descError && (
+                                                <p className="mt-1 text-sm text-red-500">{descError}</p>
+                                            )}
                                     </div>
                                 </div>
                             </div>
@@ -600,159 +650,160 @@ export function CommunitySettingsDialog({ open, onOpenChange, community }: Commu
                     </TabsContent>
 
                     {/* Tab: Thêm thành viên */}
-                    <TabsContent value="invite" className="space-y-4">
-                        <div className="space-y-4">
+                        <TabsContent value="invite" className="space-y-6">
+                            <div className="space-y-6">
                             <div>
-                                <h4 className="text-lg font-medium mb-3">Mời thành viên mới</h4>
+                                    <h4 className="text-lg font-medium mb-4">Mời thành viên mới</h4>
 
-                                {/* Tạo link mời */}
-                                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg space-y-4">
-                                    <div>
-                                        <h5 className="text-sm font-medium mb-2">Tạo link mời</h5>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <Label htmlFor="expires-hours">Thời hạn (giờ)</Label>
-                                                <Input
-                                                    id="expires-hours"
-                                                    type="number"
-                                                    value={expiresInHours}
-                                                    onChange={(e) => setExpiresInHours(Number(e.target.value))}
-                                                    min="0"
-                                                    placeholder="24"
-                                                />
+                                    {/* Tạo link mời */}
+                                    <div className="p-5 bg-gray-50 dark:bg-gray-800 rounded-xl space-y-5 border border-gray-200 dark:border-gray-700">
+                                        <div className="space-y-3">
+                                            <h5 className="text-sm font-medium">Tạo link mời</h5>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="expires-hours">Thời hạn (giờ)</Label>
+                                                    <Input
+                                                        id="expires-hours"
+                                                        type="number"
+                                                        value={expiresInHours}
+                                                        onChange={(e) => setExpiresInHours(Number(e.target.value))}
+                                                        min="0"
+                                                        placeholder="24"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="max-uses">Số lần sử dụng tối đa</Label>
+                                                    <Input
+                                                        id="max-uses"
+                                                        type="number"
+                                                        value={maxUses}
+                                                        onChange={(e) => setMaxUses(Number(e.target.value))}
+                                                        min="0"
+                                                        placeholder="10"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div>
-                                                <Label htmlFor="max-uses">Số lần sử dụng tối đa</Label>
-                                                <Input
-                                                    id="max-uses"
-                                                    type="number"
-                                                    value={maxUses}
-                                                    onChange={(e) => setMaxUses(Number(e.target.value))}
-                                                    min="0"
-                                                    placeholder="10"
-                                                />
-                                            </div>
+                                            <Button
+                                                onClick={handleCreateInviteLink}
+                                                className="w-full mt-1"
+                                            >
+                                                <UserPlus className="h-4 w-4 mr-2" />
+                                                Tạo link mời
+                                            </Button>
+                                        </div>
+
+                                        {/* Hiển thị link mời */}
+                                        {inviteLink && (
+                                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                    <div className="min-w-0">
+                                            <p className="text-sm font-medium mb-1">Link mời tham gia</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
+                                                            {inviteLink}
+                                            </p>
                                         </div>
                                         <Button
-                                            onClick={handleCreateInviteLink}
-                                            className="w-full mt-3"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleCopyInviteLink}
                                         >
-                                            <UserPlus className="h-4 w-4 mr-2" />
-                                            Tạo link mời
+                                            <Copy className="h-4 w-4 mr-2" />
+                                            Sao chép
                                         </Button>
                                     </div>
-
-                                    {/* Hiển thị link mời */}
-                                    {inviteLink && (
-                                        <div className="border-t pt-4">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm font-medium mb-1">Link mời tham gia</p>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 break-all">
-                                                        {inviteLink}
-                                                    </p>
-                                                </div>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={handleCopyInviteLink}
-                                                >
-                                                    <Copy className="h-4 w-4 mr-2" />
-                                                    Sao chép
-                                                </Button>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
                                 </div>
                             </div>
 
                             {/* Tìm kiếm bạn bè */}
-                            <div>
-                                <h5 className="text-md font-medium mb-3">Tìm bạn bè để mời</h5>
+                                <div className="space-y-3">
+                                    <h5 className="text-md font-medium">Tìm bạn bè để mời</h5>
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                     <Input
                                         placeholder="Tìm kiếm bạn bè..."
-                                        value={friendSearchTerm}
-                                        onChange={(e) => {
-                                            setFriendSearchTerm(e.target.value);
-                                            handleSearchFriends(e.target.value);
-                                        }}
+                                            value={friendSearchTerm}
+                                            onChange={(e) => {
+                                                setFriendSearchTerm(e.target.value);
+                                                handleSearchFriends(e.target.value);
+                                            }}
                                         className="pl-10"
                                     />
                                 </div>
 
-                                {/* Hiển thị kết quả tìm kiếm */}
-                                <div className="mt-3">
-                                    {isLoadingCandidates ? (
-                                        <div className="flex items-center justify-center py-8">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                                            <span className="ml-2 text-gray-500">Đang tìm kiếm...</span>
-                                        </div>
-                                    ) : inviteCandidates.length > 0 ? (
-                                        <ScrollArea className="h-64 w-full">
-                                            <div className="space-y-2 pr-4">
-                                                {inviteCandidates.map((candidate) => (
-                                                    <div key={candidate.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                                        <div className="flex items-center space-x-3">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={candidate.avatarUrl} />
-                                                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm">
-                                                                    {candidate.fullName.charAt(0).toUpperCase()}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                            <div>
-                                                                <p className="font-medium text-sm">{candidate.fullName}</p>
-                                                                {candidate.email && (
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                                                                        {candidate.email}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleInviteUser(candidate.userId)}
-                                                            disabled={invitingUsers.has(candidate.userId)}
-                                                            className="min-w-[80px]"
-                                                        >
-                                                            {invitingUsers.has(candidate.userId) ? (
-                                                                <>
-                                                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1"></div>
-                                                                    Đang mời...
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <UserPlus className="h-4 w-4 mr-1" />
-                                                                    Mời
-                                                                </>
-                                                            )}
-                                                        </Button>
-                                                    </div>
-                                                ))}
+                                    {/* Hiển thị kết quả tìm kiếm */}
+                                    <div className="mt-2">
+                                        {isLoadingCandidates ? (
+                                            <div className="flex items-center justify-center py-10">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                                                <span className="ml-2 text-gray-500">Đang tìm kiếm...</span>
                                             </div>
-                                        </ScrollArea>
-                                    ) : friendSearchTerm ? (
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
-                                            <UserPlus className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                Không tìm thấy bạn bè nào
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
-                                            <UserPlus className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                Nhập tên để tìm kiếm bạn bè
-                                            </p>
-                                        </div>
-                                    )}
+                                        ) : inviteCandidates.length > 0 ? (
+                                            <ScrollArea className="h-64 w-full">
+                                                <div className="space-y-3 pr-4">
+                                                    {inviteCandidates.map((candidate) => (
+                                                        <div key={candidate.userId} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                                            <div className="flex items-center space-x-3">
+                                                                <Avatar className="h-8 w-8">
+                                                                    <AvatarImage src={candidate.avatarUrl} />
+                                                                    <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm">
+                                                                        {candidate.fullName.charAt(0).toUpperCase()}
+                                                                    </AvatarFallback>
+                                                                </Avatar>
+                                                                <div className="min-w-0">
+                                                                    <p className="font-medium text-sm truncate max-w-[200px]">{candidate.fullName}</p>
+                                                                    {candidate.email && (
+                                                                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">
+                                                                            {candidate.email}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleInviteUser(candidate.userId)}
+                                                                disabled={invitingUsers.has(candidate.userId)}
+                                                                className="min-w-[96px]"
+                                                            >
+                                                                {invitingUsers.has(candidate.userId) ? (
+                                                                    <>
+                                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-1"></div>
+                                                                        Đang mời
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <UserPlus className="h-4 w-4 mr-1" />
+                                                                        Mời
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </ScrollArea>
+                                        ) : friendSearchTerm ? (
+                                            <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+                                                <UserPlus className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                    Không tìm thấy bạn bè nào
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+                                    <UserPlus className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                    Nhập tên để tìm kiếm bạn bè
+                                    </p>
+                                            </div>
+                                        )}
                                 </div>
                             </div>
                         </div>
                     </TabsContent>
+                    </div>
                 </Tabs>
             </DialogContent>
 

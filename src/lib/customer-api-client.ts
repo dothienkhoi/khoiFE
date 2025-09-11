@@ -41,7 +41,7 @@ if (typeof window !== 'undefined') {
 
 export const customerApiClient = axios.create({
     baseURL: `${process.env.NEXT_PUBLIC_API_BASE_URL || "https://localhost:7007"}/api/v1`,
-    timeout: 15000, // Reduced to 15s for faster failure detection
+    timeout: 30000,
 });
 
 // Request Interceptor: Tự động gắn AccessToken vào mỗi request
@@ -508,14 +508,22 @@ export const createGroup = async (data: {
 export const updateGroup = async (
     groupId: string,
     data: Partial<{
-        name: string;
+        groupName: string;
+        name: string; // UI alias -> will map to groupName
         description: string;
         isPrivate: boolean;
     }>
 ) => {
+    // Map UI fields to API contract
+    const payload: any = {
+        groupName: (data.groupName ?? data.name ?? "").toString().trim(),
+        description: (data.description ?? "").toString().trim(),
+    };
+    if (typeof data.isPrivate === 'boolean') payload.isPrivate = data.isPrivate;
+
     const response = await customerApiClient.put<CustomerApiResponse<any>>(
         `/groups/${groupId}`,
-        data
+        payload
     );
     return response.data;
 };
@@ -769,10 +777,30 @@ export const deleteMessage = async (messageId: string) => {
 // ===============================
 
 export const getUserProfile = async () => {
-    const response = await customerApiClient.get<CustomerApiResponse<UserProfile>>(
-        "/profile"
-    );
-    return response.data;
+    let lastError: any;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const timeout = attempt === 1 ? 20000 : 30000;
+            const response = await customerApiClient.get<CustomerApiResponse<UserProfile>>(
+                "/profile",
+                { timeout }
+            );
+            return response.data;
+        } catch (error: any) {
+            lastError = error;
+            const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+            if (attempt < 2 && (isTimeout || !error?.response)) {
+                await new Promise(r => setTimeout(r, 1500));
+                continue;
+            }
+            break;
+        }
+    }
+    return {
+        success: false,
+        message: lastError?.response?.data?.message || lastError?.message || 'Không thể tải thông tin hồ sơ',
+        data: undefined as any
+    };
 };
 
 export const updateUserProfile = async (data: Partial<{
@@ -791,10 +819,10 @@ export const updateUserProfile = async (data: Partial<{
 
 export const updateUserAvatar = async (avatarFile: File) => {
     const formData = new FormData();
-    formData.append("avatar", avatarFile);
+    formData.append("file", avatarFile);
 
-    const response = await customerApiClient.post<CustomerApiResponse<{ avatarUrl: string }>>(
-        "/profile/avatar",
+    const response = await customerApiClient.put<CustomerApiResponse<{ avatarUrl: string }>>(
+        "/me/avatar",
         formData,
         {
             headers: {
@@ -1194,29 +1222,36 @@ export const findOrCreateConversation = async (partnerUserId: string) => {
  * Get list of conversations for current user
  */
 export const getConversations = async (filter: 'all' | 'direct' | 'group' = 'all') => {
-    try {
-        // Skip server check and try direct API call
-        console.log('[API] Attempting direct conversations API call...');
+    // Retry up to 2 times with increasing timeouts
+    const params = new URLSearchParams();
+    if (filter !== 'all') params.append('filter', filter);
 
-        const params = new URLSearchParams();
-        if (filter !== 'all') {
-            params.append('filter', filter);
+    let lastError: any;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const timeout = attempt === 1 ? 20000 : 30000;
+            const response = await customerApiClient.get<CustomerApiResponse<Conversation[]>>(
+                `/conversations/me${params.toString() ? `?${params.toString()}` : ''}`,
+                { timeout }
+            );
+            return response.data;
+        } catch (error: any) {
+            lastError = error;
+            const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout');
+            if (attempt < 2 && (isTimeout || !error?.response)) {
+                await new Promise(r => setTimeout(r, 1500));
+                continue;
+            }
+            break;
         }
-
-        const response = await customerApiClient.get<CustomerApiResponse<Conversation[]>>(
-            `/conversations/me${params.toString() ? `?${params.toString()}` : ''}`
-        );
-        return response.data;
-    } catch (error: any) {
-        console.error('[API] Error getting conversations:', error);
-
-        // Return a safe fallback response
-        return {
-            success: false,
-            message: error.response?.data?.message || error.message || 'Failed to load conversations',
-            data: [] as Conversation[]
-        };
     }
+
+    console.error('[API] Error getting conversations:', lastError);
+    return {
+        success: false,
+        message: lastError?.response?.data?.message || lastError?.message || 'Failed to load conversations',
+        data: [] as Conversation[]
+    };
 };
 
 /**
@@ -1556,6 +1591,17 @@ export const getGroupPosts = async (
                 console.log("Mapping post:", dbPost);
 
                 const authorObj = dbPost.author || {};
+                // Normalize attachments if present in list response
+                const rawAttachments = dbPost.attachments || dbPost.Attachments || dbPost.files || dbPost.Files || [];
+                const mappedAttachments = Array.isArray(rawAttachments)
+                    ? rawAttachments.map((a: any) => ({
+                        id: a.id || a.fileId || a.FileID || `${dbPost.postId || dbPost.PostID}-${Math.random()}`,
+                        name: a.fileName || a.name || a.FileName || "Tệp đính kèm",
+                        type: a.fileType || a.type || a.FileType || "file",
+                        size: a.fileSize || a.size || a.FileSize || 0,
+                        url: a.url || a.storageUrl || a.Url || a.StorageUrl || a.storageURL || ""
+                    }))
+                    : [];
                 const mappedPost = {
                     id: dbPost.postId?.toString() || dbPost.id || dbPost.PostID?.toString(),
                     postId: dbPost.postId || dbPost.PostID,
@@ -1577,7 +1623,8 @@ export const getGroupPosts = async (
                     isPinned: dbPost.isPinned || dbPost.IsPinned || false,
                     isDeleted: dbPost.isDeleted || dbPost.IsDeleted || false,
                     createdAt: dbPost.createdAt || dbPost.CreatedAt,
-                    updatedAt: dbPost.updatedAt || dbPost.UpdatedAt
+                    updatedAt: dbPost.updatedAt || dbPost.UpdatedAt,
+                    attachments: mappedAttachments
                 };
 
                 console.log("Mapped post:", mappedPost);
@@ -1680,6 +1727,99 @@ export const createGroupPost = async (
             message: error.response?.data?.message || "Không thể tạo bài đăng",
             data: null
         };
+    }
+};
+
+// ===============================
+// POSTS MANAGEMENT (update/delete/attachments)
+// ===============================
+
+export const updatePost = async (
+    postId: number | string,
+    data: { title: string; content?: string; contentMarkdown?: string }
+): Promise<CustomerApiResponse<any>> => {
+    const payload: any = {
+        title: data.title,
+        contentMarkdown: data.contentMarkdown ?? data.content ?? "",
+    };
+    const response = await customerApiClient.put(`/posts/${postId}`, payload);
+    return response.data;
+};
+
+export const deletePost = async (postId: number | string): Promise<CustomerApiResponse<any>> => {
+    const response = await customerApiClient.delete(`/posts/${postId}`);
+    return response.data;
+};
+
+export const uploadPostAttachments = async (
+    postId: number | string,
+    files: File[]
+): Promise<CustomerApiResponse<any>> => {
+    // Attempt 1: field name 'files'
+    const buildForm = (field: 'files' | 'file' | 'attachments') => {
+        const fd = new FormData();
+        files.forEach(f => fd.append(field, f));
+        return fd;
+    };
+    try {
+        const response = await customerApiClient.post(`/posts/${postId}/attachments`, buildForm('files'), {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
+    } catch (err: any) {
+        // Attempt 2: field name 'file'
+        try {
+            const response2 = await customerApiClient.post(`/posts/${postId}/attachments`, buildForm('file'), {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            return response2.data;
+        } catch (err2: any) {
+            // Attempt 3: field name 'attachments'
+            try {
+                const response3 = await customerApiClient.post(`/posts/${postId}/attachments`, buildForm('attachments'), {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                return response3.data;
+            } catch (err3: any) {
+                // Return normalized error shape
+                return {
+                    success: false,
+                    message: err3?.response?.data?.message || err2?.response?.data?.message || err?.response?.data?.message || 'Không thể tải tệp đính kèm',
+                    data: null
+                } as any;
+            }
+        }
+    }
+};
+
+// Delete a single attachment from a post
+export const deletePostAttachment = async (
+    postId: number | string,
+    attachmentId: number | string
+): Promise<CustomerApiResponse<any>> => {
+    try {
+        // Common REST pattern
+        const res = await customerApiClient.delete(`/posts/${postId}/attachments/${attachmentId}`);
+        return res.data;
+    } catch (err: any) {
+        // Alternative patterns some backends use
+        try {
+            const res2 = await customerApiClient.delete(`/posts/${postId}/attachments`, {
+                data: { attachmentId }
+            } as any);
+            return res2.data;
+        } catch (err2: any) {
+            try {
+                const res3 = await customerApiClient.post(`/posts/${postId}/attachments/${attachmentId}/delete`, {});
+                return res3.data;
+            } catch (err3: any) {
+                return {
+                    success: false,
+                    message: err3?.response?.data?.message || err2?.response?.data?.message || err?.response?.data?.message || 'Không thể xóa tệp đính kèm',
+                    data: null
+                } as any;
+            }
+        }
     }
 };
 
@@ -1825,6 +1965,17 @@ export const getPostDetail = async (postId: string): Promise<CustomerApiResponse
             console.log("Raw post detail:", dbPost);
 
             const authorObj = dbPost.author || {};
+            // Normalize attachments from various possible shapes
+            const rawAttachments = dbPost.attachments || dbPost.Attachments || dbPost.files || dbPost.Files || [];
+            const mappedAttachments = Array.isArray(rawAttachments)
+                ? rawAttachments.map((a: any) => ({
+                    id: a.id || a.fileId || a.FileID || `${dbPost.postId || dbPost.PostID}-${Math.random()}`,
+                    name: a.fileName || a.name || a.FileName || "Tệp đính kèm",
+                    type: a.fileType || a.type || a.FileType || "file",
+                    size: a.fileSize || a.size || a.FileSize || 0,
+                    url: a.url || a.storageUrl || a.Url || a.StorageUrl || a.storageURL || ""
+                }))
+                : [];
             const mappedPost = {
                 id: dbPost.postId?.toString() || dbPost.id || dbPost.PostID?.toString(),
                 postId: dbPost.postId || dbPost.PostID,
@@ -1846,6 +1997,7 @@ export const getPostDetail = async (postId: string): Promise<CustomerApiResponse
                 isDeleted: dbPost.isDeleted || dbPost.IsDeleted || false,
                 createdAt: dbPost.createdAt || dbPost.CreatedAt,
                 updatedAt: dbPost.updatedAt || dbPost.UpdatedAt,
+                attachments: mappedAttachments,
                 comments: dbPost.comments?.map((dbComment: any) => {
                     console.log("Mapping comment:", dbComment);
                     const cAuthor = dbComment.author || {};

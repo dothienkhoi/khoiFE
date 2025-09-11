@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
-import { HubConnection, HubConnectionBuilder, LogLevel } from "@microsoft/signalr";
+import { HubConnection, HubConnectionBuilder, LogLevel, HttpTransportType } from "@microsoft/signalr";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -28,11 +28,18 @@ export function CustomerSignalRProvider({ children }: { children: ReactNode }) {
     const queryClient = useQueryClient();
 
     const createConnection = () => {
+        // Read access token from auth store lazily to avoid import cycles
+        let accessToken = "";
+        try {
+            const authStore = require("@/store/authStore");
+            accessToken = authStore.useAuthStore.getState().accessToken || "";
+        } catch { }
         const hubConnection = new HubConnectionBuilder()
-            .withUrl(`${process.env.NEXT_PUBLIC_API_BASE_URL}/customerNotificationHub`, {
+            .withUrl(`${process.env.NEXT_PUBLIC_API_BASE_URL}/hubs/notifications`, {
                 withCredentials: true,
-                skipNegotiation: true,
-                transport: 1, // WebSockets only
+                skipNegotiation: false,
+                accessTokenFactory: () => accessToken,
+                transport: HttpTransportType.WebSockets,
             })
             .withAutomaticReconnect({
                 nextRetryDelayInMilliseconds: (retryContext) => {
@@ -95,6 +102,94 @@ export function CustomerSignalRProvider({ children }: { children: ReactNode }) {
                     reconnectAttempts.current = 0;
                     toast.success("Đã kết nối lại thông báo");
                 }
+            });
+
+            // Notifications from server
+            hubConnection.on("UpdateUnreadCount", (count: number) => {
+                try {
+                    const storeModule = require("@/store/customerStore");
+                    const useCustomerStore = storeModule.useCustomerStore;
+                    useCustomerStore.getState().setUnreadCount(count);
+                    // Dispatch browser event so UI parts can listen without store import
+                    window.dispatchEvent(new CustomEvent('notifications:unread', { detail: { count } }));
+                } catch { }
+            });
+
+            // Unread count changed (e.g., invite created, server-triggered changes)
+            hubConnection.on("UnreadCountChanged", (count: number) => {
+                try {
+                    const storeModule = require("@/store/customerStore");
+                    const useCustomerStore = storeModule.useCustomerStore;
+                    useCustomerStore.getState().setUnreadCount(count);
+                    window.dispatchEvent(new CustomEvent('notifications:unread', { detail: { count } }));
+                } catch (e) { console.error('[CustomerSignalR] UnreadCountChanged handler error', e); }
+            });
+
+            // Realtime: new notification created
+            hubConnection.on("NotificationCreated", (notif: any) => {
+                try {
+                    const storeModule = require("@/store/customerStore");
+                    const useCustomerStore = storeModule.useCustomerStore;
+                    useCustomerStore.getState().addNotification(notif);
+                    window.dispatchEvent(new Event('refreshNotifications'));
+                } catch (e) { console.error('[CustomerSignalR] NotificationCreated handler error', e); }
+            });
+
+            // Realtime: notification updated (e.g., isRead)
+            hubConnection.on("NotificationUpdated", (notif: any) => {
+                try {
+                    const storeModule = require("@/store/customerStore");
+                    const useCustomerStore = storeModule.useCustomerStore;
+                    const state = useCustomerStore.getState();
+                    state.setNotifications((state.notifications || []).map((n: any) => n.id === notif.id ? { ...n, ...notif } : n));
+                    window.dispatchEvent(new Event('refreshNotifications'));
+                } catch (e) { console.error('[CustomerSignalR] NotificationUpdated handler error', e); }
+            });
+
+            // Generic receivers used by backend
+            hubConnection.on("ReceiveNotification", (notif: any) => {
+                try {
+                    const storeModule = require("@/store/customerStore");
+                    const useCustomerStore = storeModule.useCustomerStore;
+                    useCustomerStore.getState().addNotification(notif);
+                    window.dispatchEvent(new Event('refreshNotifications'));
+                } catch (e) { console.error('[CustomerSignalR] ReceiveNotification handler error', e); }
+            });
+
+            hubConnection.on("ReceiveNewNotification", (notif: any) => {
+                try {
+                    const storeModule = require("@/store/customerStore");
+                    const useCustomerStore = storeModule.useCustomerStore;
+                    useCustomerStore.getState().addNotification(notif);
+                    window.dispatchEvent(new Event('refreshNotifications'));
+                } catch (e) { console.error('[CustomerSignalR] ReceiveNewNotification handler error', e); }
+            });
+
+            // Realtime: new group invitation (optional)
+            hubConnection.on("GroupInvitationCreated", () => {
+                try { window.dispatchEvent(new Event('invitations:refresh')); }
+                catch (e) { console.error('[CustomerSignalR] GroupInvitationCreated handler error', e); }
+            });
+
+            // Group posts notifications on the same hub
+            hubConnection.on("PostLikeUpdated", (payload: any) => {
+                try { window.dispatchEvent(new CustomEvent('post:likeUpdated', { detail: payload })); }
+                catch (e) { console.error('[CustomerSignalR] PostLikeUpdated handler error', e); }
+            });
+
+            hubConnection.on("NewCommentReceived", (payload: any) => {
+                try { window.dispatchEvent(new CustomEvent('post:newComment', { detail: payload })); }
+                catch (e) { console.error('[CustomerSignalR] NewCommentReceived handler error', e); }
+            });
+
+            hubConnection.on("PostDeleted", (payload: any) => {
+                try { window.dispatchEvent(new CustomEvent('post:deleted', { detail: payload })); }
+                catch (e) { console.error('[CustomerSignalR] PostDeleted handler error', e); }
+            });
+
+            hubConnection.on("PostAttachmentsAdded", (payload: any) => {
+                try { window.dispatchEvent(new CustomEvent('post:attachmentsAdded', { detail: payload })); }
+                catch (e) { console.error('[CustomerSignalR] PostAttachmentsAdded handler error', e); }
             });
 
             // Start the connection
@@ -160,11 +255,8 @@ export function CustomerSignalRProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         isComponentMounted.current = true;
 
-        // Tạm thời tắt SignalR để tránh lỗi
-        console.log("[CustomerSignalR] Temporarily disabled to avoid connection errors");
-
-        // Connect on mount - TẮT TẠM THỜI
-        // connect();
+        // Bật kết nối notifications hub
+        connect();
 
         // Cleanup on unmount
         return () => {
@@ -203,3 +295,4 @@ export function useCustomerSignalR() {
     }
     return context;
 }
+

@@ -5,6 +5,7 @@ import { useCustomerStore } from "@/store/customerStore";
 import { CommunitiesSidebar } from "@/components/features/communities/CommunitiesSidebar";
 import { PublicGroupsContent } from "@/components/features/communities/PublicGroupsContent";
 import { CommunityPostsInterface } from "@/components/features/communities/CommunityPostsInterface";
+import { getGroupDetails } from "@/lib/customer-api-client";
 
 interface Community {
     id: string;
@@ -27,6 +28,46 @@ export default function CommunitiesPage() {
     const handleCommunitySelect = (community: Community | null) => {
         setSelectedCommunity(community);
     };
+
+    // Nhận cập nhật tức thì từ dialog cài đặt nhóm
+    useEffect(() => {
+        const handleGroupUpdated = (evt: any) => {
+            const { groupId, groupName, description, avatarUrl } = evt.detail || {};
+            if (!groupId) return;
+            setSelectedCommunity((prev) => {
+                if (!prev || prev.id !== groupId) return prev || null;
+                return {
+                    ...prev,
+                    name: groupName ?? prev.name,
+                    description: description ?? prev.description,
+                    avatarUrl: avatarUrl ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}ts=${Date.now()}` : prev.avatarUrl,
+                } as Community;
+            });
+        };
+        window.addEventListener('group:updated', handleGroupUpdated as EventListener);
+        return () => window.removeEventListener('group:updated', handleGroupUpdated as EventListener);
+    }, []);
+
+    // Đảm bảo đồng bộ khi có yêu cầu refresh toàn bộ cộng đồng
+    useEffect(() => {
+        const handleCommunitiesRefresh = async () => {
+            if (!selectedCommunity) return;
+            try {
+                const res = await getGroupDetails(selectedCommunity.id);
+                if (res?.success && res.data) {
+                    const d = res.data;
+                    setSelectedCommunity(prev => prev ? {
+                        ...prev,
+                        name: d.groupName || prev.name,
+                        description: d.description || prev.description,
+                        avatarUrl: d.groupAvatarUrl ? `${d.groupAvatarUrl}${d.groupAvatarUrl.includes('?') ? '&' : '?'}ts=${Date.now()}` : prev.avatarUrl,
+                    } : prev);
+                }
+            } catch { }
+        };
+        window.addEventListener('communities:refresh', handleCommunitiesRefresh as EventListener);
+        return () => window.removeEventListener('communities:refresh', handleCommunitiesRefresh as EventListener);
+    }, [selectedCommunity]);
 
     return (
         <div className="communities-layout">
@@ -58,8 +99,14 @@ export default function CommunitiesPage() {
                             </div>
 
                             <div className="flex items-center space-x-3">
-                                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-                                    {selectedCommunity.name.charAt(0).toUpperCase()}
+                                {/* Show community avatar image if available */}
+                                <div className="w-12 h-12 rounded-full overflow-hidden">
+                                    <img
+                                        key={selectedCommunity.avatarUrl || 'default'}
+                                        src={selectedCommunity.avatarUrl || '/images/default-avatar.png'}
+                                        alt={selectedCommunity.name}
+                                        className="w-12 h-12 object-cover"
+                                    />
                                 </div>
 
                                 <div>
@@ -86,13 +133,9 @@ export default function CommunitiesPage() {
                             groupAvatar={selectedCommunity.avatarUrl}
                         />
                     </div>
-                ) : (
-                    // Hiển thị danh sách nhóm công khai (mặc định)
-                    <PublicGroupsContent
-                        selectedCommunity={null}
-                    />
-                )}
+                ) : null}
             </div>
         </div>
     );
 }
+

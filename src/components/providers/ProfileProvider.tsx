@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { UserProfile } from "@/types/customer.types";
 import { customerApiClient } from "@/lib/customer-api-client";
 import { toast } from "sonner";
+import { useAuthStore } from "@/store/authStore";
 
 interface ProfileContextType {
     userProfile: UserProfile | null;
@@ -22,15 +23,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const hasTriedInitial = useRef(false);
+    const accessToken = useAuthStore((s) => s.accessToken);
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
     const loadProfile = async (retryCount: number = 0) => {
         try {
             setIsLoading(true);
             setError(null);
 
-            // Kiểm tra authentication trước khi gọi API
-            const token = document.cookie.split('; ').find(row => row.startsWith('auth_token='));
-            if (!token) {
+            // Kiểm tra authentication trước khi gọi API (cookie hoặc store)
+            const cookieToken = document.cookie.split('; ').find(row => row.startsWith('auth_token='));
+            const storeToken = useAuthStore.getState().accessToken;
+            if (!cookieToken && !storeToken) {
                 console.warn("[ProfileProvider] No auth token found, skipping profile load");
                 // Không set error, chỉ skip load để tránh hiện màn hình lỗi
                 return;
@@ -346,9 +351,19 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }, [userProfile]);
 
     useEffect(() => {
-        // Only load profile once on mount
-        loadProfile();
-    }, []); // Empty dependency array - only run once on mount
+        // Load once when provider mounts (if token is already available)
+        if (!hasTriedInitial.current) {
+            hasTriedInitial.current = true;
+            loadProfile();
+        }
+    }, []);
+
+    useEffect(() => {
+        // Sau khi đăng nhập (token thay đổi từ null -> có), tải hồ sơ ngay
+        if (isAuthenticated && accessToken && !userProfile && !isLoading) {
+            loadProfile();
+        }
+    }, [isAuthenticated, accessToken]);
 
     const value: ProfileContextType = {
         userProfile,
